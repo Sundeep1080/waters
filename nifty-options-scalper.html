@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOS · Nifty Options Scalper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fafafc;--bg2:#ffffff;--bg3:#f1f2f8;
+  --border:#e2e5f0;--border2:#d0d4e8;
+  --text:#1a1f36;--text2:#6b7699;--text3:#adb5cc;
+  --amber:#d97706;--amber-g:rgba(217,119,6,.08);
+  --bull:#059669;--bull-g:rgba(5,150,105,.08);
+  --bear:#dc2626;--bear-g:rgba(220,38,38,.08);
+  --kite:#4f46e5;--kite-g:rgba(79,70,229,.08);
+  --teal:#0d9488;--teal-g:rgba(13,148,136,.08);
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  --r:6px;--r-lg:10px;
+  --sh:0 1px 3px rgba(26,31,54,.06),0 1px 2px rgba(26,31,54,.04);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+.shell{max-width:1400px;margin:0 auto;padding:8px 10px 60px;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh);padding:10px 14px}
+.ct{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--text2);text-transform:uppercase;padding-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.masthead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:3px solid var(--kite)}
+.brand{font-weight:700;font-size:16px;color:var(--text)}
+.brand span{color:var(--kite)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text3);display:inline-block}
+.dot.ok{background:var(--bull);box-shadow:0 0 0 3px var(--bull-g)}
+.dot.err{background:var(--bear);box-shadow:0 0 0 3px var(--bear-g)}
+.dot.fetch{background:var(--amber);box-shadow:0 0 0 3px var(--amber-g)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.inp{font-family:var(--mono);font-size:11px;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);width:160px}
+.inp:focus{outline:none;border-color:var(--kite)}
+.btn{font-family:var(--sans);font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer}
+.btn:hover{background:var(--bg3)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-k{background:var(--kite-g);color:var(--kite);border-color:rgba(79,70,229,.3)}
+.btn-bull{background:var(--bull-g);color:var(--bull);border-color:rgba(5,150,105,.3);font-weight:700}
+.btn-bear{background:var(--bear-g);color:var(--bear);border-color:rgba(220,38,38,.3);font-weight:700}
+.btn-amber{background:var(--amber-g);color:var(--amber);border-color:rgba(217,119,6,.3)}
+.grid{display:grid;gap:8px}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--bg3);border-radius:var(--r);padding:8px 10px}
+.stat .lbl{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;font-weight:600}
+.stat .val{font-family:var(--mono);font-size:15px;font-weight:700;margin-top:2px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;border:1px solid transparent}
+.b-bull{background:var(--bull-g);color:var(--bull);border-color:rgba(5,150,105,.3)}
+.b-bear{background:var(--bear-g);color:var(--bear);border-color:rgba(220,38,38,.3)}
+.b-flat{background:var(--bg3);color:var(--text2);border-color:var(--border2)}
+.b-wait{background:var(--amber-g);color:var(--amber);border-color:rgba(217,119,6,.3)}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+th{text-align:left;color:var(--text2);font-weight:600;padding:5px 6px;border-bottom:1px solid var(--border);font-size:9px;text-transform:uppercase}
+td{padding:5px 6px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr.hi{background:var(--kite-g)}
+.tw{max-height:260px;overflow-y:auto}
+.log{font-family:var(--mono);font-size:10px;color:var(--text2);max-height:140px;overflow-y:auto;line-height:1.6}
+.log .l-ok{color:var(--bull)}
+.log .l-err{color:var(--bear)}
+.log .l-sig{color:var(--kite);font-weight:700}
+.toast-wrap{position:fixed;top:10px;right:10px;z-index:9999;display:flex;flex-direction:column;gap:6px}
+.toast{background:var(--text);color:#fff;font-size:11px;padding:8px 14px;border-radius:var(--r);box-shadow:var(--sh);animation:slidein .2s ease}
+@keyframes slidein{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.overlay{position:fixed;inset:0;background:rgba(26,31,54,.35);display:none;align-items:center;justify-content:center;z-index:9000}
+.overlay.show{display:flex}
+.modal{background:#fff;border-radius:var(--r-lg);padding:18px;width:min(420px,92vw);box-shadow:0 20px 60px rgba(26,31,54,.25)}
+.modal h3{font-size:14px;margin-bottom:10px}
+.modal .mrow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;padding:4px 0;border-bottom:1px dashed var(--border)}
+.pill{font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px}
+.p-ce{background:var(--bull-g);color:var(--bull)}
+.p-pe{background:var(--bear-g);color:var(--bear)}
+.small{font-size:10px;color:var(--text2)}
+.flexend{margin-left:auto}
+input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
+</style>
+</head>
+<body>
+<div class="toast-wrap" id="toastWrap"></div>
+<div class="overlay" id="orderOverlay">
+  <div class="modal" id="orderModal"></div>
+</div>
+
+<div class="shell">
+
+  <!-- MASTHEAD -->
+  <div class="card masthead">
+    <div class="brand">NOS · <span>Nifty Options Scalper</span></div>
+    <div class="row">
+      <span class="dot" id="dot"></span>
+      <span class="small" id="statusLine">Not connected</span>
+      <span class="small" id="clock" style="font-family:var(--mono);font-weight:600"></span>
+    </div>
+  </div>
+
+  <!-- CONNECT PANEL -->
+  <div class="card" id="connectCard">
+    <div class="ct"><i></i>Zerodha Kite Connection</div>
+    <div class="row">
+      <input class="inp" id="zdKey" placeholder="API Key">
+      <input class="inp" id="zdTok" placeholder="Access Token" style="width:260px">
+      <button class="btn btn-k" onclick="zdConnect()">Connect</button>
+      <button class="btn" id="btnFetchInstr" onclick="loadOptionInstruments()" disabled>Load Option Chain</button>
+      <span class="small flexend">Worker: jade-kite.sundeep1080.workers.dev</span>
+    </div>
+  </div>
+
+  <!-- LIVE NIFTY PANEL -->
+  <div class="card">
+    <div class="ct">Nifty 50 Index · Live</div>
+    <div class="grid grid-4">
+      <div class="stat"><div class="lbl">LTP</div><div class="val" id="statLTP">—</div></div>
+      <div class="stat"><div class="lbl">Day High / Low</div><div class="val" id="statDayHL">—</div></div>
+      <div class="stat"><div class="lbl">1st Candle (9:15-9:17) H/L</div><div class="val" id="statFirstHL">pending</div></div>
+      <div class="stat"><div class="lbl">Session VWAP*</div><div class="val" id="statVWAP">—</div></div>
+      <div class="stat"><div class="lbl">EMA 22 / 50 (HLC3)</div><div class="val" id="statEMA">—</div></div>
+      <div class="stat"><div class="lbl">SuperTrend 7,3</div><div class="val" id="statST1">—</div></div>
+      <div class="stat"><div class="lbl">SuperTrend 7,2</div><div class="val" id="statST2">—</div></div>
+      <div class="stat"><div class="lbl">SMI 10,3,3</div><div class="val" id="statSMI">—</div></div>
+    </div>
+    <div class="small" style="padding-top:6px">*Nifty index carries no traded volume, so VWAP is approximated as a running average of HLC3 per 2-min candle (TWAP), not a true volume-weighted price.</div>
+  </div>
+
+  <!-- SIGNAL ENGINE -->
+  <div class="card">
+    <div class="ct">Signal Engine <span class="pill" id="regimePill" style="background:var(--bg3);color:var(--text2)">Regime 1 · ORB</span><span class="small flexend" id="cutoffNote"></span></div>
+    <div id="signalBanner" class="row" style="padding:6px 0"><span class="badge b-flat">Waiting for market data…</span></div>
+    <div class="log" id="engineLog"></div>
+  </div>
+
+  <!-- 2-MIN CANDLES -->
+  <div class="card">
+    <div class="ct">Nifty 2-Min Candles (Index) <span class="small flexend" id="candleCount"></span></div>
+    <div class="tw"><table><thead><tr><th>Time</th><th>O</th><th>H</th><th>L</th><th>C</th><th>EMA22</th><th>EMA50</th><th>ST 7,3</th><th>ST 7,2</th><th>SMI</th></tr></thead>
+    <tbody id="candleBody"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">No candles yet — connect and wait for market data.</td></tr></tbody></table></div>
+  </div>
+
+  <!-- STRIKES READY -->
+  <div class="card">
+    <div class="ct">Option Strikes Ready <span class="small flexend" id="expiryNote"></span></div>
+    <div class="row" style="padding-bottom:6px">
+      <label class="small"><input type="checkbox" id="cbATM2" checked onchange="rebuildTrackedStrikes()"> ATM±2</label>
+      <label class="small"><input type="checkbox" id="cbATM1" checked onchange="rebuildTrackedStrikes()"> ATM±1</label>
+      <label class="small"><input type="checkbox" id="cbATM0" checked onchange="rebuildTrackedStrikes()"> ATM</label>
+      <span class="small flexend">Lots per entry: <input class="inp" id="inpLots" value="2" style="width:40px;padding:4px 6px"></span>
+    </div>
+    <div class="tw"><table><thead><tr><th>Strike</th><th>CE Symbol</th><th>CE LTP</th><th></th><th>PE Symbol</th><th>PE LTP</th><th></th></tr></thead>
+    <tbody id="strikeBody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Connect and click "Load Option Chain" first.</td></tr></tbody></table></div>
+  </div>
+
+  <!-- POSITION -->
+  <div class="card">
+    <div class="ct">Open Position</div>
+    <div id="positionWrap" class="small" style="padding:6px 0">No open position.</div>
+  </div>
+
+  <!-- ORDER LOG -->
+  <div class="card">
+    <div class="ct">Order Log</div>
+    <div class="tw"><table><thead><tr><th>Time</th><th>Side</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Reason</th><th>Status</th></tr></thead>
+    <tbody id="orderLogBody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">No orders yet.</td></tr></tbody></table></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="card">
+    <div class="ct">Settings</div>
+    <div class="row">
+      <span class="small">Entry cutoff <input class="inp" id="inpCutoff" value="14:30" style="width:60px"></span>
+      <span class="small">Poll interval (ms) <input class="inp" id="inpPoll" value="1500" style="width:60px"></span>
+      <span class="small">Product <select class="inp" id="inpProduct" style="width:80px"><option value="MIS">MIS</option><option value="NRML">NRML</option></select></span>
+      <button class="btn btn-amber" onclick="panicExit()">⚠ Exit All Now</button>
+      <button class="btn" onclick="toggleAuto()" id="autoBtn">Auto Engine: OFF</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   CONFIG
+   ══════════════════════════════════════════════════════════════ */
+const ZD_WORKER = 'https://jade-kite.sundeep1080.workers.dev';
+const NIFTY_TOKEN = 256265;
+const NIFTY_SYM = 'NSE:NIFTY 50';
+const CANDLE_MS = 2*60*1000;
+const MARKET_OPEN_MIN = 9*60+15;
+const MARKET_CLOSE_MIN = 15*60+30;
+const DEFAULT_LOT_SIZE = 65; // NSE Nifty lot size as of Jul 2026 — verify before trading, auto-overridden by instrument dump if available
+
+let zdApiKey='', zdToken='', connected=false, pollTimer=null, autoEngine=false;
+let candles=[]; // closed candles {t0,o,h,l,c}
+let liveCandle=null; // forming candle
+let dayHigh=-Infinity, dayLow=Infinity;
+let firstCandle=null;
+let vwapCum={sum:0,n:0};
+let ema22Series=[], ema50Series=[];
+let st1State={atr:null,upper:null,lower:null,dir:null,val:null}; // 7,3
+let st2State={atr:null,upper:null,lower:null,dir:null,val:null}; // 7,2
+let trArr=[]; // true range history for ATR (RMA)
+let smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
+let st1Series=[], st2Series=[], smiSeries=[]; // per-candle history for table display
+let tradeCount=0, lastDayKey=null;
+let regime2Wait=null; // {dir:'CE'|'PE'} when SMI-gated
+let position=null; // {dir, symbol, token, lotSize, lots:[{qty,entryPx,targetPx,gttId,status}], entryTime}
+let orderLog=[];
+let optionInstruments={}; // strike -> {CE:{tradingsymbol,token,lot_size},PE:{...}}
+let trackedStrikes=[];
+let latestSpot=null;
+let latestQuotes={}; // symbol(no exchange prefix) -> {ltp}
+
+/* ══════════════════════════════════════════════════════════════
+   UTIL
+   ══════════════════════════════════════════════════════════════ */
+function toast(msg,type){
+  const w=document.getElementById('toastWrap');
+  const el=document.createElement('div');el.className='toast';
+  if(type==='err')el.style.background='#dc2626';
+  if(type==='ok')el.style.background='#059669';
+  el.textContent=msg;w.appendChild(el);
+  setTimeout(()=>el.remove(),4500);
+}
+function logLine(msg,cls){
+  const el=document.getElementById('engineLog');
+  const d=document.createElement('div');
+  if(cls)d.className=cls;
+  const t=new Date().toLocaleTimeString('en-IN',{hour12:false});
+  d.textContent=`[${t}] ${msg}`;
+  el.insertBefore(d,el.firstChild);
+  while(el.children.length>200)el.removeChild(el.lastChild);
+}
+function fmt(n,d=2){return n==null||isNaN(n)?'—':Number(n).toFixed(d)}
+function nowIST(){return new Date()}
+function minutesOfDay(d){return d.getHours()*60+d.getMinutes()}
+function dayKey(d){return d.toISOString().slice(0,10)}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})+' IST'},1000);
+
+/* ══════════════════════════════════════════════════════════════
+   KITE CONNECT
+   ══════════════════════════════════════════════════════════════ */
+function setDot(state){document.getElementById('dot').className='dot '+(state||'')}
+
+function zdConnect(){
+  zdApiKey=document.getElementById('zdKey').value.trim();
+  zdToken=document.getElementById('zdTok').value.trim();
+  if(!zdApiKey||!zdToken){toast('Enter both API key and access token','err');return}
+  setDot('fetch');document.getElementById('statusLine').textContent='Testing connection…';
+  fetchQuotes([NIFTY_SYM]).then(ok=>{
+    if(ok){
+      connected=true;setDot('ok');
+      document.getElementById('statusLine').textContent='Connected · engine idle (press Auto Engine to start)';
+      document.getElementById('btnFetchInstr').disabled=false;
+      toast('Connected to Kite','ok');
+      logLine('Connected via worker.');
+    }else{
+      setDot('err');document.getElementById('statusLine').textContent='Connection failed';
+      toast('Connection failed — check API key/token','err');
+    }
+  });
+}
+
+async function fetchQuotes(symList){
+  try{
+    const params=symList.map(s=>'i='+encodeURIComponent(s)).join('&');
+    const res=await fetch(`${ZD_WORKER}/kite/quote?${params}`,{headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
+    if(!res.ok)return false;
+    const j=await res.json();
+    if(!j.data)return false;
+    Object.entries(j.data).forEach(([k,v])=>{
+      latestQuotes[k]={ltp:v.last_price,ohlc:v.ohlc||null};
+    });
+    return true;
+  }catch(e){logLine('Quote fetch error: '+e.message,'l-err');return false}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OPTION INSTRUMENT DISCOVERY (NFO dump, parsed client-side)
+   ══════════════════════════════════════════════════════════════ */
+function computeExpiryDate(){
+  // Confirmed rule: trading Wed/Thu -> nearest upcoming Tuesday ("current" expiry).
+  // Trading Fri/Sat/Sun/Mon/Tue -> the Tuesday AFTER that ("next week" expiry).
+  const d=new Date();
+  const dow=d.getDay(); // 0 Sun .. 6 Sat
+  const nearestTue=new Date(d);
+  nearestTue.setDate(d.getDate()+((2-dow+7)%7));
+  let result;
+  if(dow===3||dow===4){ // Wed, Thu
+    result=nearestTue;
+  }else{ // Fri, Sat, Sun, Mon, Tue
+    result=new Date(nearestTue);
+    result.setDate(nearestTue.getDate()+7);
+  }
+  return result.toISOString().slice(0,10);
+}
+
+async function loadOptionInstruments(){
+  if(!connected){toast('Connect first','err');return}
+  toast('Fetching NFO instrument dump…','ok');
+  logLine('Fetching NFO instruments CSV…');
+  try{
+    const res=await fetch(`${ZD_WORKER}/kite/instruments/NFO`,{headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
+    if(!res.ok){toast('Instrument fetch failed ('+res.status+')','err');return}
+    const text=await res.text();
+    const expiry=computeExpiryDate();
+    document.getElementById('expiryNote').textContent='Target expiry: '+expiry;
+    const lines=text.split('\n');
+    const header=lines[0].split(',');
+    const idx=n=>header.indexOf(n);
+    const iTok=idx('instrument_token'),iSym=idx('tradingsymbol'),iName=idx('name'),iExp=idx('expiry'),iStrike=idx('strike'),iType=idx('instrument_type'),iLot=idx('lot_size');
+    optionInstruments={};
+    let count=0;
+    for(let i=1;i<lines.length;i++){
+      const ln=lines[i];if(!ln)continue;
+      const p=ln.split(',');
+      if(p[iName]!=='NIFTY')continue;
+      if(p[iExp]!==expiry)continue;
+      const type=p[iType];
+      if(type!=='CE'&&type!=='PE')continue;
+      const strike=Math.round(parseFloat(p[iStrike]));
+      if(!optionInstruments[strike])optionInstruments[strike]={};
+      optionInstruments[strike][type]={tradingsymbol:p[iSym],token:parseInt(p[iTok]),lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE};
+      count++;
+    }
+    if(count===0){toast('No matching NIFTY contracts found for '+expiry+' — check expiry logic or dump format','err');logLine('0 NIFTY contracts matched expiry '+expiry,'l-err');return}
+    toast(`Loaded ${count} NIFTY option contracts for ${expiry}`,'ok');
+    logLine(`Loaded ${count} NIFTY contracts (expiry ${expiry}).`,'l-ok');
+    rebuildTrackedStrikes();
+  }catch(e){toast('Instrument load error: '+e.message,'err');logLine('Instrument load error: '+e.message,'l-err')}
+}
+
+function atmStrike(){
+  if(!latestSpot)return null;
+  return Math.round(latestSpot/50)*50;
+}
+
+function rebuildTrackedStrikes(){
+  const atm=atmStrike();
+  if(atm==null||!Object.keys(optionInstruments).length){trackedStrikes=[];return}
+  const set=new Set();
+  if(document.getElementById('cbATM0').checked)set.add(atm);
+  if(document.getElementById('cbATM1').checked){set.add(atm-50);set.add(atm+50)}
+  if(document.getElementById('cbATM2').checked){set.add(atm-100);set.add(atm+100)}
+  trackedStrikes=[...set].sort((a,b)=>a-b);
+  renderStrikeTable();
+}
+
+function renderStrikeTable(){
+  const tb=document.getElementById('strikeBody');
+  if(!trackedStrikes.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">No strikes tracked yet — load option chain and wait for spot price.</td></tr>';return}
+  const atm=atmStrike();
+  tb.innerHTML=trackedStrikes.map(k=>{
+    const inst=optionInstruments[k]||{};
+    const ce=inst.CE,pe=inst.PE;
+    const ceLtp=ce?(latestQuotes['NFO:'+ce.tradingsymbol]||{}).ltp:null;
+    const peLtp=pe?(latestQuotes['NFO:'+pe.tradingsymbol]||{}).ltp:null;
+    const isAtm=k===atm;
+    return `<tr class="${isAtm?'hi':''}"><td>${k}${isAtm?' <span class="pill" style="background:var(--kite-g);color:var(--kite)">ATM</span>':''}</td>
+      <td>${ce?ce.tradingsymbol:'—'}</td><td>${fmt(ceLtp)}</td>
+      <td>${ce?`<button class="btn btn-bull" style="padding:2px 8px;font-size:9px" onclick="manualTrade('CE',${k})">Buy CE</button>`:''}</td>
+      <td>${pe?pe.tradingsymbol:'—'}</td><td>${fmt(peLtp)}</td>
+      <td>${pe?`<button class="btn btn-bear" style="padding:2px 8px;font-size:9px" onclick="manualTrade('PE',${k})">Buy PE</button>`:''}</td></tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   POLLING LOOP — Nifty LTP + tracked option premiums
+   ══════════════════════════════════════════════════════════════ */
+function toggleAuto(){
+  autoEngine=!autoEngine;
+  document.getElementById('autoBtn').textContent='Auto Engine: '+(autoEngine?'ON':'OFF');
+  if(autoEngine){
+    if(!connected){toast('Connect first','err');autoEngine=false;document.getElementById('autoBtn').textContent='Auto Engine: OFF';return}
+    const ms=parseInt(document.getElementById('inpPoll').value)||1500;
+    pollTimer=setInterval(pollTick,ms);
+    toast('Engine started','ok');logLine('Auto engine started, poll every '+ms+'ms');
+    pollTick();
+  }else{
+    if(pollTimer)clearInterval(pollTimer);
+    toast('Engine stopped','ok');logLine('Auto engine stopped.');
+  }
+}
+
+async function pollTick(){
+  const d=nowIST();
+  const dk=dayKey(d);
+  if(lastDayKey&&dk!==lastDayKey)resetForNewDay();
+  lastDayKey=dk;
+
+  const syms=[NIFTY_SYM];
+  trackedStrikes.forEach(k=>{
+    const inst=optionInstruments[k]||{};
+    if(inst.CE)syms.push('NFO:'+inst.CE.tradingsymbol);
+    if(inst.PE)syms.push('NFO:'+inst.PE.tradingsymbol);
+  });
+  setDot('fetch');
+  const ok=await fetchQuotes(syms);
+  if(!ok){setDot('err');return}
+  setDot('ok');
+
+  const q=latestQuotes[NIFTY_SYM];
+  if(!q||q.ltp==null)return;
+  latestSpot=q.ltp;
+  onNiftyTick(q.ltp,d);
+  renderStrikeTable();
+  renderTopStats();
+}
+
+function resetForNewDay(){
+  candles=[];liveCandle=null;dayHigh=-Infinity;dayLow=Infinity;firstCandle=null;
+  vwapCum={sum:0,n:0};ema22Series=[];ema50Series=[];
+  st1State={atr:null,upper:null,lower:null,dir:null,val:null};
+  st2State={atr:null,upper:null,lower:null,dir:null,val:null};
+  trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
+  st1Series=[];st2Series=[];smiSeries=[];
+  tradeCount=0;regime2Wait=null;
+  logLine('New trading day — state reset.');
+  renderCandleTable();
+}
+
+function onNiftyTick(ltp,d){
+  const mins=minutesOfDay(d);
+  if(mins<MARKET_OPEN_MIN||mins>MARKET_CLOSE_MIN)return; // outside market hours
+  dayHigh=Math.max(dayHigh,ltp);dayLow=Math.min(dayLow,ltp);
+
+  const bucketStart=Math.floor(d.getTime()/CANDLE_MS)*CANDLE_MS;
+  if(!liveCandle||liveCandle.t0!==bucketStart){
+    if(liveCandle){
+      closeCandle(liveCandle);
+    }
+    liveCandle={t0:bucketStart,o:ltp,h:ltp,l:ltp,c:ltp};
+  }else{
+    liveCandle.h=Math.max(liveCandle.h,ltp);
+    liveCandle.l=Math.min(liveCandle.l,ltp);
+    liveCandle.c=ltp;
+  }
+}
+
+function closeCandle(cd){
+  candles.push(cd);
+  if(!firstCandle && candles.length===1){
+    firstCandle={h:cd.h,l:cd.l};
+    logLine(`First candle closed: H=${fmt(cd.h)} L=${fmt(cd.l)}`,'l-sig');
+  }
+  computeIndicatorsForCandle(cd);
+  renderCandleTable();
+  runSignalEngine(cd);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INDICATORS
+   ══════════════════════════════════════════════════════════════ */
+function ema(prev,src,len){
+  const k=2/(len+1);
+  return prev==null?src:src*k+prev*(1-k);
+}
+
+function computeIndicatorsForCandle(cd){
+  const hlc3=(cd.h+cd.l+cd.c)/3;
+
+  // EMA 22 / 50 on HLC3
+  const prevE22=ema22Series.length?ema22Series[ema22Series.length-1]:null;
+  const prevE50=ema50Series.length?ema50Series[ema50Series.length-1]:null;
+  ema22Series.push(ema(prevE22,hlc3,22));
+  ema50Series.push(ema(prevE50,hlc3,50));
+
+  // VWAP approximation (TWAP of HLC3 across candles — see UI note)
+  vwapCum.sum+=hlc3;vwapCum.n+=1;
+
+  // SuperTrend — standard formula, RMA-based ATR(7)
+  const prevClose=candles.length>1?candles[candles.length-2].c:cd.c;
+  const tr=Math.max(cd.h-cd.l,Math.abs(cd.h-prevClose),Math.abs(cd.l-prevClose));
+  trArr.push(tr);
+  const atr7=rma(trArr,7);
+  updateSupertrend(st1State,cd,atr7,3.0);
+  updateSupertrend(st2State,cd,atr7,2.0);
+  st1Series.push(st1State.dir);
+  st2Series.push(st2State.dir);
+
+  // SMI (10,3,3)
+  updateSMI(cd);
+  smiSeries.push(smiState.raw);
+}
+
+function rma(arr,len){
+  // Wilder's smoothing (RMA) computed fresh each call from the tail — fine for our candle counts (intraday, <300 bars/day)
+  if(arr.length<len)return arr.reduce((a,b)=>a+b,0)/arr.length;
+  let seed=arr.slice(0,len).reduce((a,b)=>a+b,0)/len;
+  for(let i=len;i<arr.length;i++){seed=(seed*(len-1)+arr[i])/len}
+  return seed;
+}
+
+function updateSupertrend(state,cd,atr,mult){
+  const hl2=(cd.h+cd.l)/2;
+  const basicUpper=hl2+mult*atr;
+  const basicLower=hl2-mult*atr;
+  let finalUpper=basicUpper, finalLower=basicLower;
+  if(state.upper!=null && (cd.c<=state.upper)) finalUpper=Math.min(basicUpper,state.upper); else finalUpper=basicUpper;
+  if(state.lower!=null && (cd.c>=state.lower)) finalLower=Math.max(basicLower,state.lower); else finalLower=basicLower;
+
+  let dir=state.dir;
+  if(dir==null){
+    dir = cd.c>=finalUpper ? 1 : -1;
+  }else if(dir===1 && cd.c<finalLower){
+    dir=-1;
+  }else if(dir===-1 && cd.c>finalUpper){
+    dir=1;
+  }
+  state.upper=finalUpper;state.lower=finalLower;state.dir=dir;
+  state.val = dir===1 ? finalLower : finalUpper;
+}
+
+function updateSMI(cd){
+  const len=10,k=3,d=3;
+  const idx=candles.length-1;
+  const from=Math.max(0,idx-len+1);
+  const windowC=candles.slice(from,idx+1);
+  const hh=Math.max(...windowC.map(x=>x.h));
+  const ll=Math.min(...windowC.map(x=>x.l));
+  const center=cd.c-(hh+ll)/2;
+  const halfRange=(hh-ll)/2;
+
+  smiState.emaC1=ema(smiState.emaC1,center,k);
+  smiState.emaC2=ema(smiState.emaC2,smiState.emaC1,d);
+  smiState.emaHl1=ema(smiState.emaHl1,halfRange,k);
+  smiState.emaHl2=ema(smiState.emaHl2,smiState.emaHl1,d);
+
+  const raw = smiState.emaHl2!==0 ? (smiState.emaC2/smiState.emaHl2)*100 : 0;
+  smiState.raw=raw;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SIGNAL ENGINE — Regime 1 (ORB) then Regime 2 (EMA/ST/SMI)
+   ══════════════════════════════════════════════════════════════ */
+function runSignalEngine(cd){
+  const banner=document.getElementById('signalBanner');
+  document.getElementById('regimePill').textContent = tradeCount===0 ? 'Regime 1 · ORB' : 'Regime 2 · Trend';
+
+  const d=nowIST();
+  const cutoffStr=document.getElementById('inpCutoff').value||'14:30';
+  const [ch,cm]=cutoffStr.split(':').map(Number);
+  const cutoffMins=ch*60+cm;
+  const pastCutoff = minutesOfDay(d) > cutoffMins;
+  document.getElementById('cutoffNote').textContent = pastCutoff ? 'Past entry cutoff — no new trades' : 'New entries allowed until '+cutoffStr;
+
+  if(position){
+    manageOpenPosition(cd);
+    return; // no new entries while a position is open
+  }
+  if(pastCutoff)return;
+  if(candles.length<2||!firstCandle)return;
+
+  if(tradeCount===0){
+    runRegime1(cd,banner);
+  }else{
+    runRegime2(cd,banner);
+  }
+}
+
+function vwapNow(){return vwapCum.n?vwapCum.sum/vwapCum.n:null}
+
+function runRegime1(cd,banner){
+  // Only check the candle that just closed (freshest), and only if it's not the first candle itself
+  if(candles.length<2)return;
+  const vw=vwapNow();
+  if(cd.o>firstCandle.h){
+    const vwapConfirm = vw!=null && cd.c>vw;
+    if(vwapConfirm){
+      fireSignal('CE',`ORB breakout up: candle opened ${fmt(cd.o)} > first-candle high ${fmt(firstCandle.h)}, confirmed by VWAP (${fmt(vw)})`);
+    }else{
+      banner.innerHTML=`<span class="badge b-wait">ORB breakout up detected but VWAP not confirming (price ${fmt(cd.c)} vs VWAP ${fmt(vw)}) — waiting</span>`;
+    }
+  }else if(cd.o<firstCandle.l){
+    const vwapConfirm = vw!=null && cd.c<vw;
+    if(vwapConfirm){
+      fireSignal('PE',`ORB breakout down: candle opened ${fmt(cd.o)} < first-candle low ${fmt(firstCandle.l)}, confirmed by VWAP (${fmt(vw)})`);
+    }else{
+      banner.innerHTML=`<span class="badge b-wait">ORB breakout down detected but VWAP not confirming (price ${fmt(cd.c)} vs VWAP ${fmt(vw)}) — waiting</span>`;
+    }
+  }else{
+    banner.innerHTML=`<span class="badge b-flat">Regime 1: watching for a candle to open beyond first-candle range (${fmt(firstCandle.l)} – ${fmt(firstCandle.h)})</span>`;
+  }
+}
+
+function runRegime2(cd,banner){
+  const i=ema22Series.length-1;
+  if(i<1){banner.innerHTML='<span class="badge b-flat">Regime 2: waiting for enough candles to compute EMA crossover</span>';return}
+  const e22now=ema22Series[i],e22prev=ema22Series[i-1];
+  const e50now=ema50Series[i],e50prev=ema50Series[i-1];
+  const crossUp = e22prev<=e50prev && e22now>e50now;
+  const crossDn = e22prev>=e50prev && e22now<e50now;
+  const stBull = st1State.dir===1 && st2State.dir===1;
+  const stBear = st1State.dir===-1 && st2State.dir===-1;
+  const smi=smiState.raw;
+
+  // If we're already gated waiting for SMI to exit a zone, check that first
+  if(regime2Wait){
+    const dir=regime2Wait.dir;
+    if(dir==='CE' && smi>-65){
+      regime2Wait=null;
+      fireSignal('CE',`Regime 2: EMA/SuperTrend signal held, SMI exited oversold (${fmt(smi)}) — entering`);
+      return;
+    }
+    if(dir==='PE' && smi<65){
+      regime2Wait=null;
+      fireSignal('PE',`Regime 2: EMA/SuperTrend signal held, SMI exited overbought (${fmt(smi)}) — entering`);
+      return;
+    }
+    banner.innerHTML=`<span class="badge b-wait">Regime 2: ${dir} signal held, waiting for SMI (${fmt(smi)}) to exit ${dir==='CE'?'oversold (-65)':'overbought (+65)'}</span>`;
+    return;
+  }
+
+  if(crossUp && stBull){
+    if(smi<=-65){
+      regime2Wait={dir:'CE'};
+      banner.innerHTML=`<span class="badge b-wait">EMA22 crossed above EMA50, both SuperTrends bullish — but SMI (${fmt(smi)}) already oversold, waiting to exit zone</span>`;
+    }else{
+      fireSignal('CE',`Regime 2: EMA22 crossed above EMA50, both SuperTrends bullish, SMI (${fmt(smi)}) not oversold`);
+    }
+  }else if(crossDn && stBear){
+    if(smi>=65){
+      regime2Wait={dir:'PE'};
+      banner.innerHTML=`<span class="badge b-wait">EMA22 crossed below EMA50, both SuperTrends bearish — but SMI (${fmt(smi)}) already overbought, waiting to exit zone</span>`;
+    }else{
+      fireSignal('PE',`Regime 2: EMA22 crossed below EMA50, both SuperTrends bearish, SMI (${fmt(smi)}) not overbought`);
+    }
+  }else{
+    banner.innerHTML=`<span class="badge b-flat">Regime 2: watching EMA22/50 crossover + dual SuperTrend agreement (ST7,3=${st1State.dir>0?'up':'down'}, ST7,2=${st2State.dir>0?'up':'down'})</span>`;
+  }
+}
+
+function fireSignal(dir,reason){
+  logLine(`SIGNAL ${dir}: ${reason}`,'l-sig');
+  toast(`${dir} signal fired — review and confirm order`,'ok');
+  const banner=document.getElementById('signalBanner');
+  banner.innerHTML=`<span class="badge ${dir==='CE'?'b-bull':'b-bear'}">${dir} SIGNAL ARMED — ${reason}</span> <button class="btn ${dir==='CE'?'btn-bull':'btn-bear'}" style="margin-left:8px" onclick="openOrderModal('${dir}', ${atmStrike()})">Review & Buy ${dir}</button>`;
+}
+
+function manualTrade(dir,strike){
+  openOrderModal(dir,strike);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ORDER MODAL — confirm before placing
+   ══════════════════════════════════════════════════════════════ */
+function openOrderModal(dir,strike){
+  const inst=(optionInstruments[strike]||{})[dir];
+  if(!inst){toast('No instrument found for that strike/type — load option chain first','err');return}
+  const ltp=(latestQuotes['NFO:'+inst.tradingsymbol]||{}).ltp;
+  const lots=parseInt(document.getElementById('inpLots').value)||2;
+  const lotSize=inst.lot_size||DEFAULT_LOT_SIZE;
+  const qty=lots*lotSize;
+  const modal=document.getElementById('orderModal');
+  modal.innerHTML=`
+    <h3><span class="pill ${dir==='CE'?'p-ce':'p-pe'}">${dir}</span> ${inst.tradingsymbol}</h3>
+    <div class="mrow"><span>Strike</span><span>${strike}</span></div>
+    <div class="mrow"><span>LTP</span><span>₹${fmt(ltp)}</span></div>
+    <div class="mrow"><span>Lot size</span><span>${lotSize}</span></div>
+    <div class="mrow"><span>Lots to buy</span><span>${lots}</span></div>
+    <div class="mrow"><span>Total qty</span><span>${qty}</span></div>
+    <div class="mrow"><span>Target Lot 1 (+5%)</span><span>₹${fmt(ltp*1.05)}</span></div>
+    <div class="mrow"><span>Target Lot 2 (+10%)</span><span>₹${fmt(ltp*1.10)}</span></div>
+    <div class="mrow"><span>Stop Loss</span><span>Index EMA22 (trailing, auto-managed)</span></div>
+    <div class="row" style="margin-top:12px;justify-content:flex-end">
+      <button class="btn" onclick="closeOrderModal()">Cancel</button>
+      <button class="btn ${dir==='CE'?'btn-bull':'btn-bear'}" onclick="confirmBuy('${dir}',${strike})">Confirm Buy</button>
+    </div>`;
+  document.getElementById('orderOverlay').classList.add('show');
+}
+function closeOrderModal(){document.getElementById('orderOverlay').classList.remove('show')}
+
+async function confirmBuy(dir,strike){
+  closeOrderModal();
+  const inst=(optionInstruments[strike]||{})[dir];
+  if(!inst)return;
+  const lots=parseInt(document.getElementById('inpLots').value)||2;
+  const lotSize=inst.lot_size||DEFAULT_LOT_SIZE;
+  const qty=lots*lotSize;
+  const product=document.getElementById('inpProduct').value;
+  const sym=inst.tradingsymbol;
+  toast('Placing order…','ok');
+  try{
+    const body=new URLSearchParams({tradingsymbol:sym,exchange:'NFO',transaction_type:'BUY',order_type:'MARKET',quantity:qty,product,validity:'DAY'});
+    const res=await fetch(`${ZD_WORKER}/place-order`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    const j=await res.json();
+    if(j.status==='success'&&j.data&&j.data.order_id){
+      const entryPx=(latestQuotes['NFO:'+sym]||{}).ltp||0;
+      logOrder('BUY',sym,qty,entryPx,'Entry — '+dir,'placed #'+j.data.order_id);
+      toast('BUY order placed ✓ #'+j.data.order_id,'ok');
+      logLine(`BUY ${qty}× ${sym} @ ~₹${fmt(entryPx)} → order #${j.data.order_id}`,'l-ok');
+      position={dir,symbol:sym,token:inst.token,lotSize,entryTime:new Date(),
+        lots:[
+          {qty:lotSize,entryPx,targetPx:round10(entryPx*1.05),gttId:null,status:'open'},
+          {qty:lotSize,entryPx,targetPx:round10(entryPx*1.10),gttId:null,status:'open'}
+        ]};
+      tradeCount++;
+      await sleep(1200);
+      await placeTargetGTTs();
+      renderPosition();
+    }else{
+      const msg=(j.message||j.error_type||JSON.stringify(j)).toString().slice(0,120);
+      toast('Order failed: '+msg,'err');logLine('BUY FAIL: '+msg,'l-err');
+    }
+  }catch(e){toast('Order error: '+e.message,'err');logLine('BUY error: '+e.message,'l-err')}
+}
+
+function round10(v){return Math.round(v*10)/10}
+
+async function placeTargetGTTs(){
+  if(!position)return;
+  for(let i=0;i<position.lots.length;i++){
+    const lot=position.lots[i];
+    try{
+      const condition={exchange:'NFO',tradingsymbol:position.symbol,trigger_values:[lot.targetPx],last_price:lot.entryPx};
+      const orders=[{exchange:'NFO',tradingsymbol:position.symbol,transaction_type:'SELL',quantity:lot.qty,order_type:'LIMIT',product:document.getElementById('inpProduct').value,price:lot.targetPx}];
+      const body=new URLSearchParams({type:'single',condition:JSON.stringify(condition),orders:JSON.stringify(orders)});
+      const res=await fetch(`${ZD_WORKER}/kite/gtt/triggers`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+      const j=await res.json();
+      if(j.status==='success'&&j.data&&j.data.trigger_id){
+        lot.gttId=j.data.trigger_id;
+        logLine(`GTT target (lot ${i+1}, +${i===0?'5':'10'}%) placed @ ₹${lot.targetPx} → ID ${lot.gttId}`,'l-ok');
+      }else{
+        logLine(`GTT failed for lot ${i+1}: ${(j.message||'').slice(0,80)} — set manually in Kite`,'l-err');
+      }
+    }catch(e){logLine('GTT error lot '+(i+1)+': '+e.message,'l-err')}
+    await sleep(800);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   POSITION MANAGEMENT — EMA22 trailing SL (index-based, our own engine)
+   ══════════════════════════════════════════════════════════════ */
+function manageOpenPosition(cd){
+  if(!position)return;
+  const i=ema22Series.length-1;
+  if(i<0)return;
+  const e22=ema22Series[i];
+  const openLots=position.lots.filter(l=>l.status==='open');
+  if(!openLots.length){position=null;renderPosition();return}
+
+  let slHit=false;
+  if(position.dir==='CE' && cd.c<e22) slHit=true;
+  if(position.dir==='PE' && cd.c>e22) slHit=true;
+
+  if(slHit){
+    logLine(`EMA22 SL hit for ${position.dir} position (index closed ${fmt(cd.c)} vs EMA22 ${fmt(e22)}) — exiting remaining lots`,'l-sig');
+    exitRemainingLots('EMA22 trailing SL hit');
+  }
+  renderPosition();
+}
+
+async function exitRemainingLots(reason){
+  if(!position)return;
+  const openLots=position.lots.filter(l=>l.status==='open');
+  if(!openLots.length)return;
+  const qty=openLots.reduce((a,l)=>a+l.qty,0);
+  const product=document.getElementById('inpProduct').value;
+  try{
+    const body=new URLSearchParams({tradingsymbol:position.symbol,exchange:'NFO',transaction_type:'SELL',order_type:'MARKET',quantity:qty,product,validity:'DAY'});
+    const res=await fetch(`${ZD_WORKER}/place-order`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    const j=await res.json();
+    if(j.status==='success'&&j.data&&j.data.order_id){
+      const exitPx=(latestQuotes['NFO:'+position.symbol]||{}).ltp||0;
+      logOrder('SELL',position.symbol,qty,exitPx,reason,'placed #'+j.data.order_id);
+      toast('Exit order placed ✓','ok');
+      openLots.forEach(l=>l.status='closed');
+      position=null;
+    }else{
+      toast('Exit order failed — exit manually in Kite app immediately','err');
+      logLine('EXIT FAIL: '+(j.message||JSON.stringify(j)).slice(0,120),'l-err');
+    }
+  }catch(e){toast('Exit error: '+e.message+' — exit manually now','err');logLine('Exit error: '+e.message,'l-err')}
+  renderPosition();
+}
+
+function panicExit(){
+  if(!position){toast('No open position','info');return}
+  if(confirm('Exit the entire open position immediately at market?')) exitRemainingLots('Manual panic exit');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RENDERING
+   ══════════════════════════════════════════════════════════════ */
+function renderTopStats(){
+  document.getElementById('statLTP').textContent=fmt(latestSpot);
+  document.getElementById('statDayHL').textContent=(dayHigh>-Infinity?fmt(dayHigh):'—')+' / '+(dayLow<Infinity?fmt(dayLow):'—');
+  document.getElementById('statFirstHL').textContent=firstCandle?fmt(firstCandle.h)+' / '+fmt(firstCandle.l):'pending';
+  const vw=vwapNow();
+  document.getElementById('statVWAP').textContent=vw!=null?fmt(vw):'—';
+  const i=ema22Series.length-1;
+  document.getElementById('statEMA').textContent=i>=0?fmt(ema22Series[i])+' / '+fmt(ema50Series[i]):'—';
+  document.getElementById('statST1').innerHTML=st1State.dir!=null?`<span class="badge ${st1State.dir===1?'b-bull':'b-bear'}">${st1State.dir===1?'UP':'DOWN'} · ${fmt(st1State.val)}</span>`:'—';
+  document.getElementById('statST2').innerHTML=st2State.dir!=null?`<span class="badge ${st2State.dir===1?'b-bull':'b-bear'}">${st2State.dir===1?'UP':'DOWN'} · ${fmt(st2State.val)}</span>`:'—';
+  document.getElementById('statSMI').innerHTML=smiState.raw!=null?`<span class="badge ${smiState.raw<=-65?'b-bear':smiState.raw>=65?'b-bull':'b-flat'}">${fmt(smiState.raw)}</span>`:'—';
+}
+
+function renderCandleTable(){
+  document.getElementById('candleCount').textContent=candles.length+' candles today';
+  const tb=document.getElementById('candleBody');
+  if(!candles.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">No candles yet.</td></tr>';return}
+  const rows=candles.slice(-30).reverse().map((cd,idx)=>{
+    const realIdx=candles.length-1-idx;
+    const t=new Date(cd.t0).toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit'});
+    const s1=st1Series[realIdx],s2=st2Series[realIdx],sm=smiSeries[realIdx];
+    return `<tr><td>${t}</td><td>${fmt(cd.o)}</td><td>${fmt(cd.h)}</td><td>${fmt(cd.l)}</td><td>${fmt(cd.c)}</td>
+      <td>${fmt(ema22Series[realIdx])}</td><td>${fmt(ema50Series[realIdx])}</td>
+      <td>${s1===1?'UP':s1===-1?'DN':'—'}</td><td>${s2===1?'UP':s2===-1?'DN':'—'}</td><td>${fmt(sm)}</td></tr>`;
+  });
+  tb.innerHTML=rows.join('');
+}
+
+function renderPosition(){
+  const wrap=document.getElementById('positionWrap');
+  if(!position){wrap.innerHTML='No open position.';return}
+  const ltp=(latestQuotes['NFO:'+position.symbol]||{}).ltp;
+  wrap.innerHTML=`<table><thead><tr><th>Symbol</th><th>Dir</th><th>Lot</th><th>Qty</th><th>Entry</th><th>LTP</th><th>P&amp;L%</th><th>Target</th><th>Status</th></tr></thead><tbody>
+  ${position.lots.map((l,i)=>{
+    const pnl=ltp&&l.entryPx?((ltp-l.entryPx)/l.entryPx*100*(position.dir==='CE'?1:1)):null;
+    return `<tr><td>${position.symbol}</td><td><span class="pill ${position.dir==='CE'?'p-ce':'p-pe'}">${position.dir}</span></td><td>${i+1}</td><td>${l.qty}</td><td>${fmt(l.entryPx)}</td><td>${fmt(ltp)}</td><td>${pnl!=null?fmt(pnl)+'%':'—'}</td><td>${fmt(l.targetPx)}</td><td>${l.status}</td></tr>`;
+  }).join('')}
+  </tbody></table>
+  <div class="small" style="padding-top:6px">SL basis: Nifty index EMA22 (${fmt(ema22Series[ema22Series.length-1])}) — trails automatically each 2-min candle close.</div>`;
+}
+
+function logOrder(side,sym,qty,price,reason,status){
+  orderLog.unshift({t:new Date(),side,sym,qty,price,reason,status});
+  const tb=document.getElementById('orderLogBody');
+  tb.innerHTML=orderLog.slice(0,50).map(o=>`<tr><td>${o.t.toLocaleTimeString('en-IN',{hour12:false})}</td><td>${o.side}</td><td>${o.sym}</td><td>${o.qty}</td><td>${fmt(o.price)}</td><td>${o.reason}</td><td>${o.status}</td></tr>`).join('');
+}
+</script>
+</body>
+</html>
