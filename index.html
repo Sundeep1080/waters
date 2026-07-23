@@ -127,8 +127,9 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
   <div class="card" id="connectCard">
     <div class="ct"><i></i>Zerodha Kite Connection</div>
     <div class="row">
-      <input class="inp" id="zdKey" placeholder="API Key">
-      <input class="inp" id="zdTok" placeholder="Access Token" style="width:260px">
+      <input class="inp" id="zdKey" type="password" autocomplete="off" placeholder="API Key">
+      <input class="inp" id="zdTok" type="password" autocomplete="off" placeholder="Access Token" style="width:260px">
+      <button class="btn" style="padding:6px 10px" onclick="toggleMask()" id="maskToggleBtn">Show</button>
       <button class="btn btn-k" onclick="zdConnect()">Connect</button>
       <button class="btn" id="btnFetchInstr" onclick="loadOptionInstruments()" disabled>Load Option Chain</button>
       <span class="small flexend">Worker: jade-kite.sundeep1080.workers.dev</span>
@@ -379,6 +380,12 @@ loadTradeHistory();
    KITE CONNECT
    ══════════════════════════════════════════════════════════════ */
 function setDot(state){document.getElementById('dot').className='dot '+(state||'')}
+function toggleMask(){
+  const k=document.getElementById('zdKey'),t=document.getElementById('zdTok'),b=document.getElementById('maskToggleBtn');
+  const hidden=k.type==='password';
+  k.type=t.type=hidden?'text':'password';
+  b.textContent=hidden?'Hide':'Show';
+}
 
 function zdConnect(){
   zdApiKey=document.getElementById('zdKey').value.trim();
@@ -445,10 +452,26 @@ async function loadOptionInstruments(){
     const ctype=res.headers.get('content-type')||'unknown';
     if(!res.ok){toast('Instrument fetch failed ('+res.status+')','err');logLine(`Instrument fetch HTTP ${res.status}, content-type ${ctype}`,'l-err');return}
     const text=await res.text();
-    logLine(`Instrument response: ${text.length} chars, content-type ${ctype}, first 120 chars: ${text.slice(0,120).replace(/\n/g,' ')}`);
+    const lines=text.split('\n').filter(Boolean);
+    logLine(`Instrument response: ${text.length} chars, ${lines.length} rows, content-type ${ctype}`);
+    if(text.length<500000){
+      logLine(`⚠ This is quite small for a full NFO dump (real one is usually several MB / 40,000+ rows covering all F&O). This might be a partial/cached/filtered response from your worker rather than the true passthrough.`,'l-err');
+    }
+    if(lines.length>1){
+      logLine(`Sample data row: ${lines[1].slice(0,160)}`);
+      const header0=lines[0].split(',');
+      const nameIdx0=header0.indexOf('name');
+      if(nameIdx0>=0){
+        const namesSeen=new Set();
+        for(let i=1;i<lines.length&&namesSeen.size<20;i++){
+          const cols=lines[i].split(',');
+          if(cols[nameIdx0])namesSeen.add(cols[nameIdx0]);
+        }
+        logLine(`Distinct "name" values actually present in this dump (up to 20 shown): [${[...namesSeen].join(', ')}]`);
+      }
+    }
     const expiry=computeExpiryDate();
     document.getElementById('expiryNote').textContent='Target expiry: '+expiry;
-    const lines=text.split('\n');
     const header=lines[0].split(',');
     const idx=n=>header.indexOf(n);
     const iTok=idx('instrument_token'),iSym=idx('tradingsymbol'),iName=idx('name'),iExp=idx('expiry'),iStrike=idx('strike'),iType=idx('instrument_type'),iLot=idx('lot_size');
