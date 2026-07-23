@@ -484,9 +484,10 @@ async function loadOptionInstruments(){
     let count=0;
     const futCandidates=[]; // {tradingsymbol,token,expiry,lot_size}
     const todayStr=new Date().toISOString().slice(0,10);
+    const cq=v=>v==null?v:v.replace(/^"+|"+$/g,''); // strip quote chars this worker wraps some fields in
     for(let i=1;i<lines.length;i++){
       const ln=lines[i];if(!ln)continue;
-      const p=ln.split(',');
+      const p=ln.split(',').map(cq);
       if(p[iName]!=='NIFTY')continue;
       const type=p[iType];
       if(type==='FUT'){
