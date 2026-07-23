@@ -260,6 +260,7 @@ let candles=[]; // closed candles {t0,o,h,l,c}
 let liveCandle=null; // forming candle
 let dayHigh=-Infinity, dayLow=Infinity;
 let firstCandle=null;
+let firstCandleUnreliable=false; // true if engine started after 9:17 — Regime 1 (ORB) skipped for the day if so
 let vwapCum={pv:0,v:0}; // volume-weighted, built from real futures cumulative volume deltas
 let prevCumVol=null;
 let niftyFutInstrument=null; // {tradingsymbol,token,expiry,lot_size} — auto-detected front month
@@ -298,7 +299,7 @@ async function saveTradeHistory(){ await idbSet('nos_trades',tradeHistory); rend
 function saveSession(){
   const snapshot={
     savedDate:dayKey(new Date()),
-    candles,liveCandle,dayHigh,dayLow,firstCandle,
+    candles,liveCandle,dayHigh,dayLow,firstCandle,firstCandleUnreliable,
     vwapCum,prevCumVol,niftyFutInstrument,
     ema22Series,ema50Series,st1State,st2State,trArr,smiState,
     st1Series,st2Series,smiSeries,tradeCount,regime2Wait,lastSignalReason,
@@ -316,7 +317,7 @@ async function restoreSession(){
     return;
   }
   candles=s.candles||[];liveCandle=s.liveCandle||null;dayHigh=s.dayHigh??-Infinity;dayLow=s.dayLow??Infinity;
-  firstCandle=s.firstCandle||null;vwapCum=s.vwapCum||{pv:0,v:0};prevCumVol=s.prevCumVol??null;
+  firstCandle=s.firstCandle||null;firstCandleUnreliable=s.firstCandleUnreliable||false;vwapCum=s.vwapCum||{pv:0,v:0};prevCumVol=s.prevCumVol??null;
   niftyFutInstrument=s.niftyFutInstrument||null;
   ema22Series=s.ema22Series||[];ema50Series=s.ema50Series||[];
   st1State=s.st1State||st1State;st2State=s.st2State||st2State;trArr=s.trArr||[];
@@ -768,7 +769,7 @@ function resetForNewDay(){
   st2State={atr:null,upper:null,lower:null,dir:null,val:null};
   trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
   st1Series=[];st2Series=[];smiSeries=[];
-  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;
+  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;
   logLine('New trading day — state reset.');
   renderCandleTable();
   renderArmedCards();
@@ -806,11 +807,24 @@ function closeCandle(cd){
   candles.push(cd);
   if(!firstCandle && candles.length===1){
     firstCandle={h:cd.h,l:cd.l};
-    logLine(`First candle closed: H=${fmt(cd.h)} L=${fmt(cd.l)}`,'l-sig');
+    const trueOpenBucket=marketOpenBucketMs(cd.t0);
+    if(cd.t0>trueOpenBucket){
+      const missedMins=Math.round((cd.t0-trueOpenBucket)/60000);
+      firstCandleUnreliable=true;
+      logLine(`⚠ ORB REFERENCE MAY BE WRONG: this is the first candle the engine actually observed, closing at ${new Date(cd.t0).toLocaleTimeString('en-IN',{hour12:false})} — but the true market-open candle (9:15-9:17) closed ${missedMins} min earlier, before the engine was running. H=${fmt(cd.h)} L=${fmt(cd.l)} is NOT the real opening range. Skipping Regime 1 (ORB) for today — going straight to Regime 2 rules. Restart the engine before 9:15 tomorrow for an accurate ORB signal.`,'l-err');
+      toast('⚠ Engine started late — skipping ORB regime for today','err');
+    }else{
+      logLine(`First candle closed: H=${fmt(cd.h)} L=${fmt(cd.l)}`,'l-sig');
+    }
   }
   computeIndicatorsForCandle(cd);
   renderCandleTable();
   runSignalEngine(cd);
+}
+function marketOpenBucketMs(sampleT0){
+  const d=new Date(sampleT0);
+  d.setHours(9,15,0,0);
+  return d.getTime();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -837,8 +851,8 @@ function computeIndicatorsForCandle(cd){
   const tr=Math.max(cd.h-cd.l,Math.abs(cd.h-prevClose),Math.abs(cd.l-prevClose));
   trArr.push(tr);
   const atr7=rma(trArr,7);
-  updateSupertrend(st1State,cd,atr7,3.0);
-  updateSupertrend(st2State,cd,atr7,2.0);
+  updateSupertrend(st1State,cd,atr7,3.0,prevClose);
+  updateSupertrend(st2State,cd,atr7,2.0,prevClose);
   st1Series.push(st1State.dir);
   st2Series.push(st2State.dir);
 
@@ -855,22 +869,33 @@ function rma(arr,len){
   return seed;
 }
 
-function updateSupertrend(state,cd,atr,mult){
+function updateSupertrend(state,cd,atr,mult,prevClose){
   const hl2=(cd.h+cd.l)/2;
   const basicUpper=hl2+mult*atr;
   const basicLower=hl2-mult*atr;
-  let finalUpper=basicUpper, finalLower=basicLower;
-  if(state.upper!=null && (cd.c<=state.upper)) finalUpper=Math.min(basicUpper,state.upper); else finalUpper=basicUpper;
-  if(state.lower!=null && (cd.c>=state.lower)) finalLower=Math.max(basicLower,state.lower); else finalLower=basicLower;
 
-  let dir=state.dir;
-  if(dir==null){
-    dir = cd.c>=finalUpper ? 1 : -1;
-  }else if(dir===1 && cd.c<finalLower){
-    dir=-1;
-  }else if(dir===-1 && cd.c>finalUpper){
-    dir=1;
+  let finalUpper,finalLower;
+  if(state.upper==null){ // first bar — no prior band to compare against
+    finalUpper=basicUpper;
+    finalLower=basicLower;
+  }else{
+    // Exact Pine ta.supertrend band-freeze rule: compares the PREVIOUS candle's close
+    // against the PREVIOUS bands, not the current candle's close (that off-by-one was the bug).
+    finalLower=(basicLower>state.lower || prevClose<state.lower) ? basicLower : state.lower;
+    finalUpper=(basicUpper<state.upper || prevClose>state.upper) ? basicUpper : state.upper;
   }
+
+  // dir=1 means uptrend (using lowerBand as the trailing stop), dir=-1 means downtrend (using upperBand) —
+  // matches this app's existing convention used everywhere else (CE confirmation checks dir===1).
+  let dir;
+  if(state.dir==null){
+    dir = cd.c>finalUpper ? 1 : -1;
+  }else if(state.dir===-1){ // was downtrend
+    dir = cd.c>finalUpper ? 1 : -1;
+  }else{ // was uptrend
+    dir = cd.c<finalLower ? -1 : 1;
+  }
+
   state.upper=finalUpper;state.lower=finalLower;state.dir=dir;
   state.val = dir===1 ? finalLower : finalUpper;
 }
@@ -899,7 +924,7 @@ function updateSMI(cd){
    ══════════════════════════════════════════════════════════════ */
 function runSignalEngine(cd){
   const banner=document.getElementById('signalBanner');
-  document.getElementById('regimePill').textContent = tradeCount===0 ? 'Regime 1 · ORB' : 'Regime 2 · Trend';
+  document.getElementById('regimePill').textContent = (tradeCount===0 && !firstCandleUnreliable) ? 'Regime 1 · ORB' : (tradeCount===0?'Regime 2 · Trend (ORB skipped, late start)':'Regime 2 · Trend');
 
   const d=nowIST();
   const cutoffStr=document.getElementById('inpCutoff').value||'14:30';
@@ -915,7 +940,7 @@ function runSignalEngine(cd){
   if(pastCutoff)return;
   if(candles.length<2||!firstCandle)return;
 
-  if(tradeCount===0){
+  if(tradeCount===0 && !firstCandleUnreliable){
     runRegime1(cd,banner);
   }else{
     runRegime2(cd,banner);
@@ -1059,9 +1084,15 @@ async function executeBuy(dir,strike,reason){
   const qty=lots*lotSize;
   const product=document.getElementById('inpProduct').value;
   const sym=inst.tradingsymbol;
+  const ltp=(latestQuotes['NFO:'+sym]||{}).ltp;
+  if(!ltp){toast('No live LTP for '+sym+' yet — cannot price the order safely','err');return}
+  // Kite's API rejects bare MARKET orders unless "market protection" is enabled on the account —
+  // same reason your original TRAM app always uses LIMIT with a price field instead. We use a
+  // marketable limit (slightly above LTP for a buy) so it fills essentially like a market order.
+  const limitPx=round10(ltp*1.003);
   toast('Placing order…','ok');
   try{
-    const body=new URLSearchParams({tradingsymbol:sym,exchange:'NFO',transaction_type:'BUY',order_type:'MARKET',quantity:qty,product,validity:'DAY'});
+    const body=new URLSearchParams({tradingsymbol:sym,exchange:'NFO',transaction_type:'BUY',order_type:'LIMIT',price:limitPx.toFixed(2),quantity:qty,product,validity:'DAY'});
     const res=await fetch(`${ZD_WORKER}/place-order`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
     const j=await res.json();
     if(j.status==='success'&&j.data&&j.data.order_id){
@@ -1208,11 +1239,14 @@ async function exitRemainingLots(reason){
   if(!openLots.length)return;
   const qty=openLots.reduce((a,l)=>a+l.qty,0);
   const product=document.getElementById('inpProduct').value;
+  const ltp=(latestQuotes['NFO:'+position.symbol]||{}).ltp;
   // Cancel any live target GTTs for these lots FIRST, so a price bounce-back can't
   // fire a naked sell after we've already flattened the position via market order.
   for(const l of openLots){ if(l.gttId) await cancelGTT(l.gttId); }
+  if(!ltp){toast('No live LTP to price the exit — EXIT MANUALLY IN KITE NOW','err');logLine('Exit aborted: no LTP available to price the order — exit manually immediately','l-err');renderPosition();return}
+  const limitPx=round10(ltp*0.997); // marketable limit, slightly below LTP for a sell — same fix as entry, Kite API needs a price
   try{
-    const body=new URLSearchParams({tradingsymbol:position.symbol,exchange:'NFO',transaction_type:'SELL',order_type:'MARKET',quantity:qty,product,validity:'DAY'});
+    const body=new URLSearchParams({tradingsymbol:position.symbol,exchange:'NFO',transaction_type:'SELL',order_type:'LIMIT',price:limitPx.toFixed(2),quantity:qty,product,validity:'DAY'});
     const res=await fetch(`${ZD_WORKER}/place-order`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
     const j=await res.json();
     if(j.status==='success'&&j.data&&j.data.order_id){
