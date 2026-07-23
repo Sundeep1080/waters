@@ -80,6 +80,29 @@ tr.hi{background:var(--kite-g)}
 .small{font-size:10px;color:var(--text2)}
 .flexend{margin-left:auto}
 input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
+.armed-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.armed-grid{grid-template-columns:1fr}}
+.armed-card{border:2px solid var(--border);border-radius:var(--r-lg);padding:12px;transition:border-color .2s}
+.armed-card.ce{border-color:rgba(5,150,105,.25)}
+.armed-card.pe{border-color:rgba(220,38,38,.25)}
+.armed-card.disabled{opacity:.45}
+.armed-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.armed-ltp{font-family:var(--mono);font-size:22px;font-weight:700;margin:6px 0}
+.armed-meta{font-size:10px;color:var(--text2);font-family:var(--mono)}
+.btn-fire{width:100%;padding:12px;font-size:14px;font-weight:700;border-radius:var(--r);border:none;cursor:pointer;margin-top:8px}
+.btn-fire.ce{background:var(--bull-g);color:var(--bull);border:2px solid var(--bull)}
+.btn-fire.pe{background:var(--bear-g);color:var(--bear);border:2px solid var(--bear)}
+.btn-fire:disabled{opacity:.4;cursor:not-allowed;animation:none!important}
+.btn-fire.blink{animation:fireBlink 0.7s ease-in-out infinite}
+@keyframes fireBlink{
+  0%,100%{background:var(--bull);color:#fff;box-shadow:0 0 0 0 rgba(5,150,105,.5)}
+  50%{background:var(--bull-g);color:var(--bull);box-shadow:0 0 0 8px rgba(5,150,105,0)}
+}
+.btn-fire.pe.blink{animation-name:fireBlinkPE}
+@keyframes fireBlinkPE{
+  0%,100%{background:var(--bear);color:#fff;box-shadow:0 0 0 0 rgba(220,38,38,.5)}
+  50%{background:var(--bear-g);color:var(--bear);box-shadow:0 0 0 8px rgba(220,38,38,0)}
+}
 </style>
 </head>
 <body>
@@ -114,25 +137,43 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
 
   <!-- LIVE NIFTY PANEL -->
   <div class="card">
-    <div class="ct">Nifty 50 Index · Live</div>
+    <div class="ct">Nifty Futures (Front Month) · Live <span class="small flexend" id="futContractNote">not loaded — connect first</span></div>
     <div class="grid grid-4">
-      <div class="stat"><div class="lbl">LTP</div><div class="val" id="statLTP">—</div></div>
+      <div class="stat"><div class="lbl">Futures LTP</div><div class="val" id="statLTP">—</div></div>
+      <div class="stat"><div class="lbl">Spot Ref (NIFTY 50, display only)</div><div class="val" id="statSpotRef">—</div></div>
       <div class="stat"><div class="lbl">Day High / Low</div><div class="val" id="statDayHL">—</div></div>
       <div class="stat"><div class="lbl">1st Candle (9:15-9:17) H/L</div><div class="val" id="statFirstHL">pending</div></div>
-      <div class="stat"><div class="lbl">Session VWAP*</div><div class="val" id="statVWAP">—</div></div>
+      <div class="stat"><div class="lbl">Session VWAP</div><div class="val" id="statVWAP">—</div></div>
       <div class="stat"><div class="lbl">EMA 22 / 50 (HLC3)</div><div class="val" id="statEMA">—</div></div>
       <div class="stat"><div class="lbl">SuperTrend 7,3</div><div class="val" id="statST1">—</div></div>
       <div class="stat"><div class="lbl">SuperTrend 7,2</div><div class="val" id="statST2">—</div></div>
       <div class="stat"><div class="lbl">SMI 10,3,3</div><div class="val" id="statSMI">—</div></div>
     </div>
-    <div class="small" style="padding-top:6px">*Nifty index carries no traded volume, so VWAP is approximated as a running average of HLC3 per 2-min candle (TWAP), not a true volume-weighted price.</div>
+    <div class="small" style="padding-top:6px">Entire engine (candles, EMA, SuperTrend, SMI, VWAP, Day H/L, first-candle H/L, strike selection) runs on the front-month futures contract. VWAP is now a genuine volume-weighted price, built from the futures contract's real cumulative traded volume. Spot is shown only for your own reference, it feeds nothing.</div>
   </div>
+
 
   <!-- SIGNAL ENGINE -->
   <div class="card">
     <div class="ct">Signal Engine <span class="pill" id="regimePill" style="background:var(--bg3);color:var(--text2)">Regime 1 · ORB</span><span class="small flexend" id="cutoffNote"></span></div>
     <div id="signalBanner" class="row" style="padding:6px 0"><span class="badge b-flat">Waiting for market data…</span></div>
     <div class="log" id="engineLog"></div>
+  </div>
+
+  <!-- ARMED ENTRIES — Max OI Support/Resistance, always live, one-tap fire -->
+  <div class="card">
+    <div class="ct">Armed Entries — Max OI Support / Resistance
+      <span class="small flexend" id="oiUpdatedNote">OI not loaded yet</span>
+    </div>
+    <div class="row" style="padding-bottom:8px">
+      <span class="small">OI scan band: ±<input class="inp" id="inpOIBand" value="10" style="width:40px;padding:4px 6px"> strikes</span>
+      <span class="small">Support (Max Put OI): <b id="lblSupport">—</b></span>
+      <span class="small">Resistance (Max Call OI): <b id="lblResistance">—</b></span>
+    </div>
+    <div class="armed-grid">
+      <div class="armed-card ce" id="armedCE"></div>
+      <div class="armed-card pe" id="armedPE"></div>
+    </div>
   </div>
 
   <!-- 2-MIN CANDLES -->
@@ -168,6 +209,22 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     <tbody id="orderLogBody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">No orders yet.</td></tr></tbody></table></div>
   </div>
 
+  <!-- TRADE HISTORY & BACKTEST -->
+  <div class="card">
+    <div class="ct">Trade History & Backtest
+      <button class="btn flexend" style="padding:3px 10px" onclick="exportTradeHistory()">Export JSON</button>
+      <button class="btn" style="padding:3px 10px" onclick="if(confirm('Clear ALL stored trade history? This cannot be undone.')){tradeHistory=[];saveTradeHistory();}">Clear</button>
+    </div>
+    <div class="grid grid-4" id="tradeStatsGrid" style="padding-bottom:8px">
+      <div class="stat"><div class="lbl">Total Trades</div><div class="val" id="tsCount">0</div></div>
+      <div class="stat"><div class="lbl">Win Rate</div><div class="val" id="tsWinRate">—</div></div>
+      <div class="stat"><div class="lbl">Avg P&amp;L %</div><div class="val" id="tsAvgPnl">—</div></div>
+      <div class="stat"><div class="lbl">Regime 1 vs 2</div><div class="val" id="tsRegime">—</div></div>
+    </div>
+    <div class="tw"><table><thead><tr><th>Date</th><th>Dir</th><th>Regime</th><th>Strike</th><th>Entry</th><th>Lots Exited</th><th>P&amp;L %</th><th>Status</th><th>Reason</th></tr></thead>
+    <tbody id="tradeHistoryBody"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">No trades recorded yet.</td></tr></tbody></table></div>
+  </div>
+
   <!-- SETTINGS -->
   <div class="card">
     <div class="ct">Settings</div>
@@ -188,7 +245,10 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
    ══════════════════════════════════════════════════════════════ */
 const ZD_WORKER = 'https://jade-kite.sundeep1080.workers.dev';
 const NIFTY_TOKEN = 256265;
-const NIFTY_SYM = 'NSE:NIFTY 50';
+const NIFTY_SYM = 'NSE:NIFTY 50'; // spot — used ONLY as a small reference readout now, not for any engine calc
+// Per your decision: the entire engine (candles, EMA, SuperTrend, SMI, VWAP, Day H/L, first-candle H/L,
+// and ATM/Support/Resistance strike selection) runs on the current front-month NIFTY FUTURES contract,
+// auto-detected from the NFO instrument dump and re-detected on every connect (handles monthly rollover).
 const CANDLE_MS = 2*60*1000;
 const MARKET_OPEN_MIN = 9*60+15;
 const MARKET_CLOSE_MIN = 15*60+30;
@@ -199,7 +259,9 @@ let candles=[]; // closed candles {t0,o,h,l,c}
 let liveCandle=null; // forming candle
 let dayHigh=-Infinity, dayLow=Infinity;
 let firstCandle=null;
-let vwapCum={sum:0,n:0};
+let vwapCum={pv:0,v:0}; // volume-weighted, built from real futures cumulative volume deltas
+let prevCumVol=null;
+let niftyFutInstrument=null; // {tradingsymbol,token,expiry,lot_size} — auto-detected front month
 let ema22Series=[], ema50Series=[];
 let st1State={atr:null,upper:null,lower:null,dir:null,val:null}; // 7,3
 let st2State={atr:null,upper:null,lower:null,dir:null,val:null}; // 7,2
@@ -208,12 +270,70 @@ let smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
 let st1Series=[], st2Series=[], smiSeries=[]; // per-candle history for table display
 let tradeCount=0, lastDayKey=null;
 let regime2Wait=null; // {dir:'CE'|'PE'} when SMI-gated
+let lastSignalReason=null;
 let position=null; // {dir, symbol, token, lotSize, lots:[{qty,entryPx,targetPx,gttId,status}], entryTime}
 let orderLog=[];
 let optionInstruments={}; // strike -> {CE:{tradingsymbol,token,lot_size},PE:{...}}
 let trackedStrikes=[];
-let latestSpot=null;
-let latestQuotes={}; // symbol(no exchange prefix) -> {ltp}
+let tradeHistory=[]; // persisted to IndexedDB — full trade records for backtesting
+let orderFillPollTimer=null;
+
+/* ══════════════════════════════════════════════════════════════
+   INDEXEDDB — same key-value pattern as your other TRAM tools
+   ══════════════════════════════════════════════════════════════ */
+const IDB_NAME='NOS_DB',IDB_VER=1,IDB_STORE='nos_store';let _idb=null;
+function openIDB(){return new Promise((res,rej)=>{if(_idb){res(_idb);return}const req=indexedDB.open(IDB_NAME,IDB_VER);req.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(IDB_STORE))db.createObjectStore(IDB_STORE)};req.onsuccess=e=>{_idb=e.target.result;res(_idb)};req.onerror=e=>rej(e)})}
+async function idbSet(key,val){try{const db=await openIDB();return new Promise((res)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(val,key);tx.oncomplete=()=>res(true);tx.onerror=()=>{try{localStorage.setItem(key,JSON.stringify(val))}catch(e){}res(false)}})}catch(e){try{localStorage.setItem(key,JSON.stringify(val))}catch(e2){}return false}}
+async function idbGet(key){try{const db=await openIDB();return new Promise((res)=>{const tx=db.transaction(IDB_STORE,'readonly'),req=tx.objectStore(IDB_STORE).get(key);req.onsuccess=()=>{if(req.result!==undefined){res(req.result);return}const ls=localStorage.getItem(key);res(ls?JSON.parse(ls):null)};req.onerror=()=>{const ls=localStorage.getItem(key);res(ls?JSON.parse(ls):null)}})}catch(e){const ls=localStorage.getItem(key);return ls?JSON.parse(ls):null}}
+
+async function loadTradeHistory(){
+  tradeHistory=await idbGet('nos_trades')||[];
+  renderTradeHistory();
+  logLine(`Loaded ${tradeHistory.length} trade record(s) from IndexedDB.`);
+}
+async function saveTradeHistory(){ await idbSet('nos_trades',tradeHistory); renderTradeHistory(); }
+
+/* ── SESSION STATE — persists candles/indicators/open position/trail progress across a reload ── */
+function saveSession(){
+  const snapshot={
+    savedDate:dayKey(new Date()),
+    candles,liveCandle,dayHigh,dayLow,firstCandle,
+    vwapCum,prevCumVol,niftyFutInstrument,
+    ema22Series,ema50Series,st1State,st2State,trArr,smiState,
+    st1Series,st2Series,smiSeries,tradeCount,regime2Wait,lastSignalReason,
+    position,optionInstruments,trackedStrikes,supportStrike,resistanceStrike,armedDir,
+    orderLog:orderLog.slice(0,50)
+  };
+  idbSet('nos_session',snapshot);
+}
+
+async function restoreSession(){
+  const s=await idbGet('nos_session');
+  if(!s){logLine('No previous session found to restore.');return}
+  if(s.savedDate!==dayKey(new Date())){
+    logLine(`Previous session was from ${s.savedDate}, not today — starting fresh instead of restoring stale state.`);
+    return;
+  }
+  candles=s.candles||[];liveCandle=s.liveCandle||null;dayHigh=s.dayHigh??-Infinity;dayLow=s.dayLow??Infinity;
+  firstCandle=s.firstCandle||null;vwapCum=s.vwapCum||{pv:0,v:0};prevCumVol=s.prevCumVol??null;
+  niftyFutInstrument=s.niftyFutInstrument||null;
+  ema22Series=s.ema22Series||[];ema50Series=s.ema50Series||[];
+  st1State=s.st1State||st1State;st2State=s.st2State||st2State;trArr=s.trArr||[];
+  smiState=s.smiState||smiState;st1Series=s.st1Series||[];st2Series=s.st2Series||[];smiSeries=s.smiSeries||[];
+  tradeCount=s.tradeCount||0;regime2Wait=s.regime2Wait||null;lastSignalReason=s.lastSignalReason||null;
+  position=s.position||null;optionInstruments=s.optionInstruments||{};trackedStrikes=s.trackedStrikes||[];
+  supportStrike=s.supportStrike??null;resistanceStrike=s.resistanceStrike??null;armedDir=s.armedDir||null;
+  orderLog=s.orderLog||[];
+  lastDayKey=s.savedDate;
+  if(niftyFutInstrument)document.getElementById('futContractNote').textContent='Tracking: '+niftyFutInstrument.tradingsymbol+' (expiry '+niftyFutInstrument.expiry+')';
+  renderCandleTable();renderStrikeTable();renderArmedCards();renderPosition();
+  if(position)logLine(`Resumed OPEN POSITION from previous session: ${position.dir} ${position.symbol} — EMA22 trailing will continue once Auto Engine starts.`,'l-sig');
+  else logLine('Session restored — candles, indicators and strikes picked up from where you left off.','l-ok');
+}
+let latestFutLtp=null; // the value the whole engine runs on (front-month futures LTP)
+let latestSpotRef=null; // real NIFTY 50 spot, reference display only — not used in any calculation
+let latestQuotes={}; // symbol(no exchange prefix) -> {ltp,oi}
+let supportStrike=null, resistanceStrike=null, oiPollTimer=null, armedDir=null;
 
 /* ══════════════════════════════════════════════════════════════
    UTIL
@@ -242,6 +362,18 @@ function dayKey(d){return d.toISOString().slice(0,10)}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false})+' IST'},1000);
+loadTradeHistory();
+(function initFromPriorSession(){
+  try{
+    const k=sessionStorage.getItem('nos_zd_key'), t=sessionStorage.getItem('nos_zd_tok');
+    if(k&&t){
+      document.getElementById('zdKey').value=k;
+      document.getElementById('zdTok').value=t;
+      logLine('Found saved credentials from this browser tab session — reconnecting automatically…');
+      zdConnect();
+    }
+  }catch(e){}
+})();
 
 /* ══════════════════════════════════════════════════════════════
    KITE CONNECT
@@ -253,13 +385,16 @@ function zdConnect(){
   zdToken=document.getElementById('zdTok').value.trim();
   if(!zdApiKey||!zdToken){toast('Enter both API key and access token','err');return}
   setDot('fetch');document.getElementById('statusLine').textContent='Testing connection…';
-  fetchQuotes([NIFTY_SYM]).then(ok=>{
+  fetchQuotes([NIFTY_SYM]).then(async ok=>{
     if(ok){
       connected=true;setDot('ok');
-      document.getElementById('statusLine').textContent='Connected · engine idle (press Auto Engine to start)';
+      document.getElementById('statusLine').textContent='Connected · loading futures contract & option chain…';
       document.getElementById('btnFetchInstr').disabled=false;
       toast('Connected to Kite','ok');
       logLine('Connected via worker.');
+      try{sessionStorage.setItem('nos_zd_key',zdApiKey);sessionStorage.setItem('nos_zd_tok',zdToken)}catch(e){}
+      await restoreSession(); // pick up candles/indicators/open position from before a reload, if any, same trading day
+      loadOptionInstruments(); // also auto-detects front-month futures — re-runs every connect, so rollover is automatic
     }else{
       setDot('err');document.getElementById('statusLine').textContent='Connection failed';
       toast('Connection failed — check API key/token','err');
@@ -275,7 +410,7 @@ async function fetchQuotes(symList){
     const j=await res.json();
     if(!j.data)return false;
     Object.entries(j.data).forEach(([k,v])=>{
-      latestQuotes[k]={ltp:v.last_price,ohlc:v.ohlc||null};
+      latestQuotes[k]={ltp:v.last_price,oi:v.oi!=null?v.oi:null,volume:v.volume!=null?v.volume:null,ohlc:v.ohlc||null};
     });
     return true;
   }catch(e){logLine('Quote fetch error: '+e.message,'l-err');return false}
@@ -307,29 +442,69 @@ async function loadOptionInstruments(){
   logLine('Fetching NFO instruments CSV…');
   try{
     const res=await fetch(`${ZD_WORKER}/kite/instruments/NFO`,{headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
-    if(!res.ok){toast('Instrument fetch failed ('+res.status+')','err');return}
+    const ctype=res.headers.get('content-type')||'unknown';
+    if(!res.ok){toast('Instrument fetch failed ('+res.status+')','err');logLine(`Instrument fetch HTTP ${res.status}, content-type ${ctype}`,'l-err');return}
     const text=await res.text();
+    logLine(`Instrument response: ${text.length} chars, content-type ${ctype}, first 120 chars: ${text.slice(0,120).replace(/\n/g,' ')}`);
     const expiry=computeExpiryDate();
     document.getElementById('expiryNote').textContent='Target expiry: '+expiry;
     const lines=text.split('\n');
     const header=lines[0].split(',');
     const idx=n=>header.indexOf(n);
     const iTok=idx('instrument_token'),iSym=idx('tradingsymbol'),iName=idx('name'),iExp=idx('expiry'),iStrike=idx('strike'),iType=idx('instrument_type'),iLot=idx('lot_size');
+    if(iSym===-1||iName===-1||iExp===-1){
+      toast('Response doesn\'t look like the instrument CSV — check log for raw content','err');
+      logLine(`Header parse failed — got columns: [${header.slice(0,8).join(', ')}${header.length>8?', …':''}]. Expected instrument_token,tradingsymbol,name,expiry,strike,instrument_type,lot_size among them.`,'l-err');
+      return;
+    }
     optionInstruments={};
     let count=0;
+    const futCandidates=[]; // {tradingsymbol,token,expiry,lot_size}
+    const todayStr=new Date().toISOString().slice(0,10);
     for(let i=1;i<lines.length;i++){
       const ln=lines[i];if(!ln)continue;
       const p=ln.split(',');
       if(p[iName]!=='NIFTY')continue;
-      if(p[iExp]!==expiry)continue;
       const type=p[iType];
+      if(type==='FUT'){
+        if(p[iExp]>=todayStr){
+          futCandidates.push({tradingsymbol:p[iSym],token:parseInt(p[iTok]),expiry:p[iExp],lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE});
+        }
+        continue;
+      }
+      if(p[iExp]!==expiry)continue;
       if(type!=='CE'&&type!=='PE')continue;
       const strike=Math.round(parseFloat(p[iStrike]));
       if(!optionInstruments[strike])optionInstruments[strike]={};
       optionInstruments[strike][type]={tradingsymbol:p[iSym],token:parseInt(p[iTok]),lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE};
       count++;
     }
-    if(count===0){toast('No matching NIFTY contracts found for '+expiry+' — check expiry logic or dump format','err');logLine('0 NIFTY contracts matched expiry '+expiry,'l-err');return}
+    // Front-month futures = soonest expiry that hasn't passed yet. Re-running this on every connect
+    // means expiry-day rollover to the next contract happens automatically, no manual step needed.
+    if(futCandidates.length){
+      futCandidates.sort((a,b)=>a.expiry.localeCompare(b.expiry));
+      const prev=niftyFutInstrument;
+      niftyFutInstrument=futCandidates[0];
+      const label=`${niftyFutInstrument.tradingsymbol} (expiry ${niftyFutInstrument.expiry})`;
+      document.getElementById('futContractNote').textContent='Tracking: '+label;
+      if(!prev || prev.tradingsymbol!==niftyFutInstrument.tradingsymbol){
+        logLine('Front-month futures contract: '+label,'l-ok');
+        prevCumVol=null; // reset volume baseline on contract switch so VWAP doesn't jump
+      }
+    }else{
+      logLine('No NIFTY FUT rows found in instrument dump — futures-based engine cannot run until this resolves','l-err');
+      toast('No NIFTY futures contract found — check log','err');
+    }
+    if(count===0){
+      const sampleExpiries=new Set();
+      for(let i=1;i<lines.length && sampleExpiries.size<8;i++){
+        const p=lines[i].split(',');
+        if(p[iName]==='NIFTY')sampleExpiries.add(p[iExp]);
+      }
+      toast('No matching NIFTY contracts for '+expiry+' — see log for expiries actually found','err');
+      logLine(`0 NIFTY contracts matched expiry ${expiry}. Expiries actually present for NIFTY in this dump: [${[...sampleExpiries].join(', ')||'none found — "name" column may not equal literal NIFTY, check raw sample above'}]`,'l-err');
+      return;
+    }
     toast(`Loaded ${count} NIFTY option contracts for ${expiry}`,'ok');
     logLine(`Loaded ${count} NIFTY contracts (expiry ${expiry}).`,'l-ok');
     rebuildTrackedStrikes();
@@ -337,8 +512,8 @@ async function loadOptionInstruments(){
 }
 
 function atmStrike(){
-  if(!latestSpot)return null;
-  return Math.round(latestSpot/50)*50;
+  if(!latestFutLtp)return null;
+  return Math.round(latestFutLtp/50)*50;
 }
 
 function rebuildTrackedStrikes(){
@@ -350,6 +525,7 @@ function rebuildTrackedStrikes(){
   if(document.getElementById('cbATM2').checked){set.add(atm-100);set.add(atm+100)}
   trackedStrikes=[...set].sort((a,b)=>a-b);
   renderStrikeTable();
+  renderArmedCards();
 }
 
 function renderStrikeTable(){
@@ -380,10 +556,15 @@ function toggleAuto(){
     if(!connected){toast('Connect first','err');autoEngine=false;document.getElementById('autoBtn').textContent='Auto Engine: OFF';return}
     const ms=parseInt(document.getElementById('inpPoll').value)||1500;
     pollTimer=setInterval(pollTick,ms);
-    toast('Engine started','ok');logLine('Auto engine started, poll every '+ms+'ms');
+    oiPollTimer=setInterval(pollOI,20000);
+    orderFillPollTimer=setInterval(pollOrderFills,8000);
+    toast('Engine started','ok');logLine('Auto engine started, poll every '+ms+'ms, OI scan every 20s, order-fill check every 8s');
     pollTick();
+    pollOI();
   }else{
     if(pollTimer)clearInterval(pollTimer);
+    if(oiPollTimer)clearInterval(oiPollTimer);
+    if(orderFillPollTimer)clearInterval(orderFillPollTimer);
     toast('Engine stopped','ok');logLine('Auto engine stopped.');
   }
 }
@@ -394,7 +575,12 @@ async function pollTick(){
   if(lastDayKey&&dk!==lastDayKey)resetForNewDay();
   lastDayKey=dk;
 
-  const syms=[NIFTY_SYM];
+  if(!niftyFutInstrument){
+    logLine('No futures contract loaded yet — click "Load Option Chain" (also auto-detects futures)','l-err');
+    return;
+  }
+  const futSym='NFO:'+niftyFutInstrument.tradingsymbol;
+  const syms=[futSym,NIFTY_SYM];
   trackedStrikes.forEach(k=>{
     const inst=optionInstruments[k]||{};
     if(inst.CE)syms.push('NFO:'+inst.CE.tradingsymbol);
@@ -405,30 +591,154 @@ async function pollTick(){
   if(!ok){setDot('err');return}
   setDot('ok');
 
-  const q=latestQuotes[NIFTY_SYM];
+  const q=latestQuotes[futSym];
   if(!q||q.ltp==null)return;
-  latestSpot=q.ltp;
-  onNiftyTick(q.ltp,d);
+  latestFutLtp=q.ltp;
+  const spotQ=latestQuotes[NIFTY_SYM];
+  if(spotQ&&spotQ.ltp!=null)latestSpotRef=spotQ.ltp;
+
+  onFuturesTick(q.ltp,q.volume,d);
   renderStrikeTable();
   renderTopStats();
+  renderArmedCards();
+  saveSession();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OI POLLING — determines Support (max Put OI) / Resistance (max Call OI)
+   ══════════════════════════════════════════════════════════════ */
+async function pollOI(){
+  if(!Object.keys(optionInstruments).length||!latestFutLtp)return;
+  const atm=atmStrike();
+  const band=parseInt(document.getElementById('inpOIBand').value)||10;
+  const strikes=Object.keys(optionInstruments).map(Number).filter(k=>Math.abs(k-atm)<=band*50);
+  if(!strikes.length)return;
+  const syms=[];
+  strikes.forEach(k=>{
+    const inst=optionInstruments[k];
+    if(inst.CE)syms.push('NFO:'+inst.CE.tradingsymbol);
+    if(inst.PE)syms.push('NFO:'+inst.PE.tradingsymbol);
+  });
+  const ok=await fetchQuotes(syms);
+  if(!ok){logLine('OI scan fetch failed','l-err');return}
+  let maxCallOI=-1,maxPutOI=-1,resStrike=null,supStrike=null;
+  strikes.forEach(k=>{
+    const inst=optionInstruments[k];
+    if(inst.CE){
+      const oi=(latestQuotes['NFO:'+inst.CE.tradingsymbol]||{}).oi;
+      if(oi!=null && oi>maxCallOI){maxCallOI=oi;resStrike=k}
+    }
+    if(inst.PE){
+      const oi=(latestQuotes['NFO:'+inst.PE.tradingsymbol]||{}).oi;
+      if(oi!=null && oi>maxPutOI){maxPutOI=oi;supStrike=k}
+    }
+  });
+  if(resStrike==null||supStrike==null){logLine('OI scan returned no usable OI data — check if worker/quote response includes an "oi" field','l-err');return}
+  const changed = resStrike!==resistanceStrike || supStrike!==supportStrike;
+  resistanceStrike=resStrike;supportStrike=supStrike;
+  document.getElementById('lblSupport').textContent=supportStrike+' (Put OI '+maxPutOI.toLocaleString('en-IN')+')';
+  document.getElementById('lblResistance').textContent=resistanceStrike+' (Call OI '+maxCallOI.toLocaleString('en-IN')+')';
+  document.getElementById('oiUpdatedNote').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour12:false});
+  if(changed)logLine(`S/R updated — Support ${supportStrike} (Put OI ${maxPutOI}), Resistance ${resistanceStrike} (Call OI ${maxCallOI})`);
+  renderArmedCards();
+}
+
+let orderFillDiag=false; // only log the raw-response diagnostic once, to avoid spamming the log every 8s
+
+async function pollOrderFills(){
+  if(!position)return;
+  const openLots=position.lots.filter(l=>l.status==='open');
+  if(!openLots.length)return;
+  try{
+    const res=await fetch(`${ZD_WORKER}/kite/orders`,{headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
+    if(!res.ok){
+      if(!orderFillDiag){logLine(`Order-fill check: HTTP ${res.status} from /kite/orders — this worker route may not be supported; use "Mark filled" manually instead`,'l-err');orderFillDiag=true}
+      return;
+    }
+    const j=await res.json();
+    if(!j.data || !Array.isArray(j.data)){
+      if(!orderFillDiag){logLine('Order-fill check: unexpected response shape from /kite/orders — use "Mark filled" manually instead','l-err');orderFillDiag=true}
+      return;
+    }
+    const already=new Set(position.processedOrderIds||[]);
+    const fills=j.data.filter(o=>o.tradingsymbol===position.symbol && o.transaction_type==='SELL' && o.status==='COMPLETE' && !already.has(o.order_id));
+    for(const o of fills){
+      const lot=position.lots.find(l=>l.status==='open' && l.qty===o.quantity);
+      if(!lot)continue;
+      lot.status='closed';
+      const fillPx=parseFloat(o.average_price)||lot.targetPx;
+      recordLotExit(lot,fillPx,'GTT target (auto-detected fill)');
+      logLine(`Auto-detected fill: ${o.quantity}× ${position.symbol} @ ₹${fmt(fillPx)} (order #${o.order_id})`,'l-ok');
+      position.processedOrderIds=[...(position.processedOrderIds||[]),o.order_id];
+      renderPosition();
+    }
+    if(position && !position.lots.some(l=>l.status==='open')){
+      finalizeTrade();position=null;renderArmedCards();renderPosition();
+    }
+    saveSession();
+  }catch(e){ if(!orderFillDiag){logLine('Order-fill check error: '+e.message+' — use "Mark filled" manually instead','l-err');orderFillDiag=true} }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ARMED ENTRY CARDS — always-live CE/PE, blink-to-fire on signal
+   ══════════════════════════════════════════════════════════════ */
+function renderArmedCards(){
+  renderOneArmedCard('CE',supportStrike,'armedCE');
+  renderOneArmedCard('PE',resistanceStrike,'armedPE');
+}
+
+function renderOneArmedCard(dir,strike,elId){
+  const el=document.getElementById(elId);
+  if(strike==null||!optionInstruments[strike]||!optionInstruments[strike][dir]){
+    el.className='armed-card '+dir.toLowerCase();
+    el.innerHTML=`<div class="armed-head"><b>${dir}</b><span class="small">awaiting OI scan</span></div><div class="small">Strike not yet determined.</div>`;
+    return;
+  }
+  const inst=optionInstruments[strike][dir];
+  const ltp=(latestQuotes['NFO:'+inst.tradingsymbol]||{}).ltp;
+  const lots=parseInt(document.getElementById('inpLots').value)||2;
+  const lotSize=inst.lot_size||DEFAULT_LOT_SIZE;
+  const qty=lots*lotSize;
+  const isArmed = armedDir===dir && !position;
+  const disabled = !!position;
+  el.className='armed-card '+dir.toLowerCase()+(disabled?' disabled':'');
+  el.innerHTML=`
+    <div class="armed-head"><b>${dir} · ${strike}</b><span class="small">${dir==='CE'?'Support':'Resistance'} strike</span></div>
+    <div class="small">${inst.tradingsymbol}</div>
+    <div class="armed-ltp">₹${fmt(ltp)}</div>
+    <div class="armed-meta">${lots} lots × ${lotSize} = ${qty} qty · Targets +5% / +10%</div>
+    <button class="btn-fire ${dir.toLowerCase()} ${isArmed?'blink':''}" ${disabled||ltp==null?'disabled':''} onclick="armedBuy('${dir}',${strike})">
+      ${disabled?'Position open':isArmed?'⚡ BUY '+dir+' NOW':'Buy '+dir}
+    </button>`;
 }
 
 function resetForNewDay(){
   candles=[];liveCandle=null;dayHigh=-Infinity;dayLow=Infinity;firstCandle=null;
-  vwapCum={sum:0,n:0};ema22Series=[];ema50Series=[];
+  vwapCum={pv:0,v:0};prevCumVol=null;ema22Series=[];ema50Series=[];
   st1State={atr:null,upper:null,lower:null,dir:null,val:null};
   st2State={atr:null,upper:null,lower:null,dir:null,val:null};
   trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
   st1Series=[];st2Series=[];smiSeries=[];
-  tradeCount=0;regime2Wait=null;
+  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;
   logLine('New trading day — state reset.');
   renderCandleTable();
+  renderArmedCards();
 }
 
-function onNiftyTick(ltp,d){
+function onFuturesTick(ltp,cumVol,d){
   const mins=minutesOfDay(d);
   if(mins<MARKET_OPEN_MIN||mins>MARKET_CLOSE_MIN)return; // outside market hours
   dayHigh=Math.max(dayHigh,ltp);dayLow=Math.min(dayLow,ltp);
+
+  // Real volume-weighted VWAP: quote gives cumulative day volume, so we weight by the
+  // volume traded since the previous poll, not the whole day's volume at once.
+  if(cumVol!=null){
+    if(prevCumVol!=null){
+      const deltaVol=cumVol-prevCumVol;
+      if(deltaVol>0){vwapCum.pv+=ltp*deltaVol;vwapCum.v+=deltaVol}
+    }
+    prevCumVol=cumVol;
+  }
 
   const bucketStart=Math.floor(d.getTime()/CANDLE_MS)*CANDLE_MS;
   if(!liveCandle||liveCandle.t0!==bucketStart){
@@ -471,8 +781,7 @@ function computeIndicatorsForCandle(cd){
   ema22Series.push(ema(prevE22,hlc3,22));
   ema50Series.push(ema(prevE50,hlc3,50));
 
-  // VWAP approximation (TWAP of HLC3 across candles — see UI note)
-  vwapCum.sum+=hlc3;vwapCum.n+=1;
+  // VWAP is accumulated per-tick in onFuturesTick from real futures volume, not here.
 
   // SuperTrend — standard formula, RMA-based ATR(7)
   const prevClose=candles.length>1?candles[candles.length-2].c:cd.c;
@@ -564,7 +873,7 @@ function runSignalEngine(cd){
   }
 }
 
-function vwapNow(){return vwapCum.n?vwapCum.sum/vwapCum.n:null}
+function vwapNow(){return vwapCum.v?vwapCum.pv/vwapCum.v:null}
 
 function runRegime1(cd,banner){
   // Only check the candle that just closed (freshest), and only if it's not the first candle itself
@@ -638,9 +947,13 @@ function runRegime2(cd,banner){
 
 function fireSignal(dir,reason){
   logLine(`SIGNAL ${dir}: ${reason}`,'l-sig');
-  toast(`${dir} signal fired — review and confirm order`,'ok');
+  toast(`${dir} signal fired — tap the blinking button to buy`,'ok');
+  armedDir=dir;
+  lastSignalReason=reason;
+  renderArmedCards();
   const banner=document.getElementById('signalBanner');
-  banner.innerHTML=`<span class="badge ${dir==='CE'?'b-bull':'b-bear'}">${dir} SIGNAL ARMED — ${reason}</span> <button class="btn ${dir==='CE'?'btn-bull':'btn-bear'}" style="margin-left:8px" onclick="openOrderModal('${dir}', ${atmStrike()})">Review & Buy ${dir}</button>`;
+  const strike = dir==='CE'?supportStrike:resistanceStrike;
+  banner.innerHTML=`<span class="badge ${dir==='CE'?'b-bull':'b-bear'}">${dir} SIGNAL ARMED (strike ${strike??'?'}) — ${reason}. Tap the blinking button below to fire.</span>`;
 }
 
 function manualTrade(dir,strike){
@@ -678,6 +991,18 @@ function closeOrderModal(){document.getElementById('orderOverlay').classList.rem
 
 async function confirmBuy(dir,strike){
   closeOrderModal();
+  await executeBuy(dir,strike,'Manual (order modal)');
+}
+
+async function armedBuy(dir,strike){
+  if(position){toast('Position already open','err');return}
+  const reason=lastSignalReason||'Manual (armed card tap, no active signal)';
+  armedDir=null; // disarm both sides immediately on tap, before the network call resolves
+  renderArmedCards();
+  await executeBuy(dir,strike,reason);
+}
+
+async function executeBuy(dir,strike,reason){
   const inst=(optionInstruments[strike]||{})[dir];
   if(!inst)return;
   const lots=parseInt(document.getElementById('inpLots').value)||2;
@@ -695,12 +1020,17 @@ async function confirmBuy(dir,strike){
       logOrder('BUY',sym,qty,entryPx,'Entry — '+dir,'placed #'+j.data.order_id);
       toast('BUY order placed ✓ #'+j.data.order_id,'ok');
       logLine(`BUY ${qty}× ${sym} @ ~₹${fmt(entryPx)} → order #${j.data.order_id}`,'l-ok');
-      position={dir,symbol:sym,token:inst.token,lotSize,entryTime:new Date(),
+      const tradeId=Date.now()+'_'+dir;
+      position={dir,symbol:sym,token:inst.token,lotSize,strike,tradeId,entryTime:new Date(),
         lots:[
           {qty:lotSize,entryPx,targetPx:round10(entryPx*1.05),gttId:null,status:'open'},
           {qty:lotSize,entryPx,targetPx:round10(entryPx*1.10),gttId:null,status:'open'}
         ]};
+      recordTradeEntry(tradeId,dir,strike,sym,lots,lotSize,entryPx,reason);
+      saveSession();
       tradeCount++;
+      armedDir=null;
+      renderArmedCards();
       await sleep(1200);
       await placeTargetGTTs();
       renderPosition();
@@ -709,6 +1039,63 @@ async function confirmBuy(dir,strike){
       toast('Order failed: '+msg,'err');logLine('BUY FAIL: '+msg,'l-err');
     }
   }catch(e){toast('Order error: '+e.message,'err');logLine('BUY error: '+e.message,'l-err')}
+}
+
+function renderTradeHistory(){
+  const body=document.getElementById('tradeHistoryBody');
+  if(!body)return; // not yet in DOM on very first load call
+  if(!tradeHistory.length){
+    body.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">No trades recorded yet.</td></tr>';
+    document.getElementById('tsCount').textContent='0';
+    document.getElementById('tsWinRate').textContent='—';
+    document.getElementById('tsAvgPnl').textContent='—';
+    document.getElementById('tsRegime').textContent='—';
+    return;
+  }
+  const closed=tradeHistory.filter(t=>t.status==='closed'&&t.finalPnlPct!=null);
+  const wins=closed.filter(t=>t.finalPnlPct>0).length;
+  const winRate=closed.length?(wins/closed.length*100):null;
+  const avgPnl=closed.length?(closed.reduce((a,t)=>a+t.finalPnlPct,0)/closed.length):null;
+  const r1=tradeHistory.filter(t=>t.regime===1).length, r2=tradeHistory.filter(t=>t.regime===2).length;
+  document.getElementById('tsCount').textContent=tradeHistory.length;
+  document.getElementById('tsWinRate').textContent=winRate!=null?fmt(winRate,1)+'% ('+wins+'/'+closed.length+')':'—';
+  document.getElementById('tsAvgPnl').textContent=avgPnl!=null?fmt(avgPnl,2)+'%':'—';
+  document.getElementById('tsRegime').textContent=r1+' / '+r2;
+
+  body.innerHTML=[...tradeHistory].reverse().slice(0,100).map(t=>{
+    const exitedQty=t.lotExits.length+'/'+t.lots;
+    const pnlStr=t.finalPnlPct!=null?fmt(t.finalPnlPct,2)+'%':(t.status==='open'?'open':'—');
+    const pnlClass=t.finalPnlPct==null?'':(t.finalPnlPct>0?'style="color:var(--bull)"':'style="color:var(--bear)"');
+    return `<tr><td>${t.date}</td><td><span class="pill ${t.dir==='CE'?'p-ce':'p-pe'}">${t.dir}</span></td><td>${t.regime}</td><td>${t.strike}</td><td>${fmt(t.entryPx)}</td><td>${exitedQty}</td><td ${pnlClass}>${pnlStr}</td><td>${t.status}</td><td class="small">${(t.reason||'').slice(0,50)}</td></tr>`;
+  }).join('');
+}
+
+function exportTradeHistory(){
+  if(!tradeHistory.length){toast('No trade history to export','err');return}
+  const blob=new Blob([JSON.stringify(tradeHistory,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='nos_trade_history_'+dayKey(new Date())+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Exported '+tradeHistory.length+' trade record(s)','ok');
+}
+function recordTradeEntry(tradeId,dir,strike,sym,lots,lotSize,entryPx,reason){
+  const trade={
+    id:tradeId,date:dayKey(new Date()),dir,regime:tradeCount===0?1:2,reason,
+    strike,tradingsymbol:sym,lots,lotSize,
+    entryTime:new Date().toISOString(),entryPx,
+    underlyingAtEntry:latestFutLtp,spotAtEntry:latestSpotRef,
+    indicatorsAtEntry:{
+      ema22:ema22Series.length?ema22Series[ema22Series.length-1]:null,
+      ema50:ema50Series.length?ema50Series[ema50Series.length-1]:null,
+      st1dir:st1State.dir,st2dir:st2State.dir,
+      smi:smiState.raw,vwap:vwapNow()
+    },
+    lotExits:[],status:'open',closedTime:null,finalPnlPct:null,finalPnlAbs:null
+  };
+  tradeHistory.push(trade);
+  saveTradeHistory();
 }
 
 function round10(v){return Math.round(v*10)/10}
@@ -743,7 +1130,7 @@ function manageOpenPosition(cd){
   if(i<0)return;
   const e22=ema22Series[i];
   const openLots=position.lots.filter(l=>l.status==='open');
-  if(!openLots.length){position=null;renderPosition();return}
+  if(!openLots.length){position=null;renderPosition();renderArmedCards();return}
 
   let slHit=false;
   if(position.dir==='CE' && cd.c<e22) slHit=true;
@@ -756,12 +1143,25 @@ function manageOpenPosition(cd){
   renderPosition();
 }
 
+async function cancelGTT(gttId){
+  if(!gttId)return;
+  try{
+    const res=await fetch(`${ZD_WORKER}/kite/gtt/triggers/${gttId}`,{method:'DELETE',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
+    const j=await res.json();
+    if(j.status==='success')logLine(`Cancelled GTT #${gttId}`,'l-ok');
+    else logLine(`GTT cancel may have failed for #${gttId}: ${(j.message||'').slice(0,80)} — verify manually in Kite`,'l-err');
+  }catch(e){logLine(`GTT cancel error for #${gttId}: ${e.message} — verify manually in Kite`,'l-err')}
+}
+
 async function exitRemainingLots(reason){
   if(!position)return;
   const openLots=position.lots.filter(l=>l.status==='open');
   if(!openLots.length)return;
   const qty=openLots.reduce((a,l)=>a+l.qty,0);
   const product=document.getElementById('inpProduct').value;
+  // Cancel any live target GTTs for these lots FIRST, so a price bounce-back can't
+  // fire a naked sell after we've already flattened the position via market order.
+  for(const l of openLots){ if(l.gttId) await cancelGTT(l.gttId); }
   try{
     const body=new URLSearchParams({tradingsymbol:position.symbol,exchange:'NFO',transaction_type:'SELL',order_type:'MARKET',quantity:qty,product,validity:'DAY'});
     const res=await fetch(`${ZD_WORKER}/place-order`,{method:'POST',headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
@@ -770,14 +1170,40 @@ async function exitRemainingLots(reason){
       const exitPx=(latestQuotes['NFO:'+position.symbol]||{}).ltp||0;
       logOrder('SELL',position.symbol,qty,exitPx,reason,'placed #'+j.data.order_id);
       toast('Exit order placed ✓','ok');
-      openLots.forEach(l=>l.status='closed');
+      openLots.forEach(l=>{l.status='closed';recordLotExit(l,exitPx,reason)});
+      finalizeTrade();
       position=null;
+      renderArmedCards();
+      saveSession();
     }else{
       toast('Exit order failed — exit manually in Kite app immediately','err');
       logLine('EXIT FAIL: '+(j.message||JSON.stringify(j)).slice(0,120),'l-err');
     }
   }catch(e){toast('Exit error: '+e.message+' — exit manually now','err');logLine('Exit error: '+e.message,'l-err')}
   renderPosition();
+}
+
+function recordLotExit(lot,exitPx,reason){
+  if(!position)return;
+  const trade=tradeHistory.find(t=>t.id===position.tradeId);
+  if(!trade)return;
+  const pnlPct=lot.entryPx?((exitPx-lot.entryPx)/lot.entryPx*100):null;
+  trade.lotExits.push({qty:lot.qty,entryPx:lot.entryPx,exitPx,exitTime:new Date().toISOString(),reason,pnlPct});
+  saveTradeHistory();
+}
+
+function finalizeTrade(){
+  if(!position)return;
+  const trade=tradeHistory.find(t=>t.id===position.tradeId);
+  if(!trade)return;
+  if(trade.lotExits.length){
+    const totalQty=trade.lotExits.reduce((a,e)=>a+e.qty,0);
+    trade.finalPnlPct=trade.lotExits.reduce((a,e)=>a+(e.pnlPct||0)*e.qty,0)/totalQty;
+    trade.finalPnlAbs=trade.lotExits.reduce((a,e)=>a+((e.exitPx-e.entryPx)*e.qty),0);
+  }
+  trade.status='closed';
+  trade.closedTime=new Date().toISOString();
+  saveTradeHistory();
 }
 
 function panicExit(){
@@ -789,7 +1215,8 @@ function panicExit(){
    RENDERING
    ══════════════════════════════════════════════════════════════ */
 function renderTopStats(){
-  document.getElementById('statLTP').textContent=fmt(latestSpot);
+  document.getElementById('statLTP').textContent=fmt(latestFutLtp);
+  document.getElementById('statSpotRef').textContent=fmt(latestSpotRef);
   document.getElementById('statDayHL').textContent=(dayHigh>-Infinity?fmt(dayHigh):'—')+' / '+(dayLow<Infinity?fmt(dayLow):'—');
   document.getElementById('statFirstHL').textContent=firstCandle?fmt(firstCandle.h)+' / '+fmt(firstCandle.l):'pending';
   const vw=vwapNow();
@@ -820,13 +1247,28 @@ function renderPosition(){
   const wrap=document.getElementById('positionWrap');
   if(!position){wrap.innerHTML='No open position.';return}
   const ltp=(latestQuotes['NFO:'+position.symbol]||{}).ltp;
-  wrap.innerHTML=`<table><thead><tr><th>Symbol</th><th>Dir</th><th>Lot</th><th>Qty</th><th>Entry</th><th>LTP</th><th>P&amp;L%</th><th>Target</th><th>Status</th></tr></thead><tbody>
+  wrap.innerHTML=`<table><thead><tr><th>Symbol</th><th>Dir</th><th>Lot</th><th>Qty</th><th>Entry</th><th>LTP</th><th>P&amp;L%</th><th>Target</th><th>Status</th><th>GTT</th></tr></thead><tbody>
   ${position.lots.map((l,i)=>{
     const pnl=ltp&&l.entryPx?((ltp-l.entryPx)/l.entryPx*100*(position.dir==='CE'?1:1)):null;
-    return `<tr><td>${position.symbol}</td><td><span class="pill ${position.dir==='CE'?'p-ce':'p-pe'}">${position.dir}</span></td><td>${i+1}</td><td>${l.qty}</td><td>${fmt(l.entryPx)}</td><td>${fmt(ltp)}</td><td>${pnl!=null?fmt(pnl)+'%':'—'}</td><td>${fmt(l.targetPx)}</td><td>${l.status}</td></tr>`;
+    const gttAction = l.status==='open' ? `<button class="btn" style="padding:2px 8px;font-size:9px" onclick="manualMarkLotFilled(${i})">Mark filled</button>` : '—';
+    return `<tr><td>${position.symbol}</td><td><span class="pill ${position.dir==='CE'?'p-ce':'p-pe'}">${position.dir}</span></td><td>${i+1}</td><td>${l.qty}</td><td>${fmt(l.entryPx)}</td><td>${fmt(ltp)}</td><td>${pnl!=null?fmt(pnl)+'%':'—'}</td><td>${fmt(l.targetPx)}</td><td>${l.status}</td><td>${gttAction}</td></tr>`;
   }).join('')}
   </tbody></table>
-  <div class="small" style="padding-top:6px">SL basis: Nifty index EMA22 (${fmt(ema22Series[ema22Series.length-1])}) — trails automatically each 2-min candle close.</div>`;
+  <div class="small" style="padding-top:6px">SL basis: Nifty index EMA22 (${fmt(ema22Series[ema22Series.length-1])}) — trails automatically each 2-min candle close. "Mark filled" is a manual fallback for when a GTT target executes on Zerodha's side — the app polls order history automatically every ~8s to try to catch this itself, but tap this if it doesn't.</div>`;
+}
+
+async function manualMarkLotFilled(idx){
+  if(!position||!position.lots[idx]||position.lots[idx].status!=='open')return;
+  const lot=position.lots[idx];
+  const exitPx=lot.targetPx;
+  if(!confirm(`Mark lot ${idx+1} as filled at target ₹${fmt(exitPx)}? Only do this if you've confirmed the GTT actually executed in Kite.`))return;
+  lot.status='closed';
+  recordLotExit(lot,exitPx,'GTT target (manually confirmed)');
+  const stillOpen=position.lots.some(l=>l.status==='open');
+  if(!stillOpen){finalizeTrade();position=null;renderArmedCards()}
+  renderPosition();
+  saveSession();
+  toast('Lot marked filled and logged','ok');
 }
 
 function logOrder(side,sym,qty,price,reason,status){
