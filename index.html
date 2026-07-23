@@ -443,6 +443,30 @@ function computeExpiryDate(){
   return result.toISOString().slice(0,10);
 }
 
+// Fallback for when the worker's instrument dump doesn't include FUT rows (confirmed the case for this
+// worker — it only returns NFO-OPT rows). Nifty monthly futures expire the same way as monthly options:
+// last Tuesday of the month. Kite's quote API accepts a plain trading symbol, so we don't need the
+// instrument_token from the dump at all — just construct "NIFTY{YY}{MON}FUT" directly.
+function lastTuesdayOfMonth(year,monthIdx0){
+  const d=new Date(year,monthIdx0+1,0); // last calendar day of the month
+  const back=(d.getDay()-2+7)%7;
+  d.setDate(d.getDate()-back);
+  return d;
+}
+function computeFrontMonthFutureFallback(){
+  const now=new Date();
+  const todayStr=dayKey(now);
+  let y=now.getFullYear(),m=now.getMonth();
+  let expiry=lastTuesdayOfMonth(y,m);
+  if(dayKey(expiry)<todayStr){ // this month's contract already expired — roll to next month
+    m+=1; if(m>11){m=0;y+=1}
+    expiry=lastTuesdayOfMonth(y,m);
+  }
+  const yy=String(y).slice(-2);
+  const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][expiry.getMonth()];
+  return {tradingsymbol:`NIFTY${yy}${MON}FUT`,token:null,expiry:dayKey(expiry),lot_size:DEFAULT_LOT_SIZE,source:'constructed (worker dump has no FUT rows)'};
+}
+
 async function loadOptionInstruments(){
   if(!connected){toast('Connect first','err');return}
   toast('Fetching NFO instrument dump…','ok');
@@ -505,19 +529,20 @@ async function loadOptionInstruments(){
     }
     // Front-month futures = soonest expiry that hasn't passed yet. Re-running this on every connect
     // means expiry-day rollover to the next contract happens automatically, no manual step needed.
+    if(!futCandidates.length){
+      logLine('No NIFTY FUT rows in this worker\'s instrument dump — constructing the front-month futures symbol directly instead (Kite quote API accepts trading symbols without needing the token).','l-err');
+      futCandidates.push(computeFrontMonthFutureFallback());
+    }
     if(futCandidates.length){
       futCandidates.sort((a,b)=>a.expiry.localeCompare(b.expiry));
       const prev=niftyFutInstrument;
       niftyFutInstrument=futCandidates[0];
-      const label=`${niftyFutInstrument.tradingsymbol} (expiry ${niftyFutInstrument.expiry})`;
+      const label=`${niftyFutInstrument.tradingsymbol} (expiry ${niftyFutInstrument.expiry})${niftyFutInstrument.source?' — '+niftyFutInstrument.source:''}`;
       document.getElementById('futContractNote').textContent='Tracking: '+label;
       if(!prev || prev.tradingsymbol!==niftyFutInstrument.tradingsymbol){
         logLine('Front-month futures contract: '+label,'l-ok');
         prevCumVol=null; // reset volume baseline on contract switch so VWAP doesn't jump
       }
-    }else{
-      logLine('No NIFTY FUT rows found in instrument dump — futures-based engine cannot run until this resolves','l-err');
-      toast('No NIFTY futures contract found — check log','err');
     }
     if(count===0){
       const sampleExpiries=new Set();
