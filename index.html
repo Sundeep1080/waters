@@ -103,10 +103,33 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
   0%,100%{background:var(--bear);color:#fff;box-shadow:0 0 0 0 rgba(220,38,38,.5)}
   50%{background:var(--bear-g);color:var(--bear);box-shadow:0 0 0 8px rgba(220,38,38,0)}
 }
+.big-order-banner{position:fixed;top:0;left:0;right:0;z-index:9800;padding:16px 20px;font-family:var(--sans);
+  box-shadow:0 4px 20px rgba(0,0,0,.25);display:none;align-items:center;gap:14px;animation:bannerIn .25s ease}
+.big-order-banner.show{display:flex}
+@keyframes bannerIn{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.big-order-banner.ok{background:#059669;color:#fff}
+.big-order-banner.err{background:#dc2626;color:#fff}
+.big-order-banner.info{background:#1a1f36;color:#fff}
+.big-order-banner .bob-icon{font-size:32px;line-height:1}
+.big-order-banner .bob-text{flex:1}
+.big-order-banner .bob-title{font-size:19px;font-weight:800;letter-spacing:.01em}
+.big-order-banner .bob-sub{font-size:13px;opacity:.92;margin-top:2px;font-family:var(--mono)}
+.big-order-banner .bob-close{background:rgba(255,255,255,.2);border:none;color:#fff;font-size:20px;font-weight:700;
+  width:32px;height:32px;border-radius:50%;cursor:pointer;flex-shrink:0}
+.chk-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;color:var(--text2)}
+.chk-row.chk-ok{color:var(--text);font-weight:600}
+.chk-box{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--border2);display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;color:#fff}
+.chk-row.chk-ok .chk-box{background:var(--bull);border-color:var(--bull)}
 </style>
 </head>
 <body>
 <div class="toast-wrap" id="toastWrap"></div>
+<div class="big-order-banner" id="bigOrderBanner">
+  <div class="bob-icon" id="bobIcon">✅</div>
+  <div class="bob-text"><div class="bob-title" id="bobTitle"></div><div class="bob-sub" id="bobSub"></div></div>
+  <button class="bob-close" onclick="hideBigOrderBanner()">×</button>
+</div>
 <div class="overlay" id="orderOverlay">
   <div class="modal" id="orderModal"></div>
 </div>
@@ -131,6 +154,7 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
       <input class="inp" id="zdTok" type="password" autocomplete="off" placeholder="Access Token" style="width:260px">
       <button class="btn" style="padding:6px 10px" onclick="toggleMask()" id="maskToggleBtn">Show</button>
       <button class="btn btn-k" onclick="zdConnect()">Connect</button>
+      <button class="btn" onclick="toggleAuto()" id="autoBtn">Auto Engine: OFF</button>
       <button class="btn" id="btnFetchInstr" onclick="loadOptionInstruments()" disabled>Load Option Chain</button>
       <span class="small flexend">Worker: jade-kite.sundeep1080.workers.dev</span>
     </div>
@@ -159,6 +183,12 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     <div class="ct">Signal Engine <span class="pill" id="regimePill" style="background:var(--bg3);color:var(--text2)">Regime 1 · ORB</span><span class="small flexend" id="cutoffNote"></span></div>
     <div id="signalBanner" class="row" style="padding:6px 0"><span class="badge b-flat">Waiting for market data…</span></div>
     <div class="log" id="engineLog"></div>
+  </div>
+
+  <!-- ENTRY CONDITIONS CHECKLIST -->
+  <div class="card">
+    <div class="ct">Entry Conditions Checklist <span class="small flexend">All conditions on a side must tick before that signal fires</span></div>
+    <div id="checklistWrap"><div class="small">No active checklist yet — connect and start the engine.</div></div>
   </div>
 
   <!-- ARMED ENTRIES — Max OI Support/Resistance, always live, one-tap fire -->
@@ -234,7 +264,6 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
       <span class="small">Poll interval (ms) <input class="inp" id="inpPoll" value="1500" style="width:60px"></span>
       <span class="small">Product <select class="inp" id="inpProduct" style="width:80px"><option value="MIS">MIS</option><option value="NRML">NRML</option></select></span>
       <button class="btn btn-amber" onclick="panicExit()">⚠ Exit All Now</button>
-      <button class="btn" onclick="toggleAuto()" id="autoBtn">Auto Engine: OFF</button>
     </div>
   </div>
 
@@ -261,6 +290,7 @@ let liveCandle=null; // forming candle
 let dayHigh=-Infinity, dayLow=Infinity;
 let firstCandle=null;
 let firstCandleUnreliable=false; // true if engine started after 9:17 — Regime 1 (ORB) skipped for the day if so
+let historicalBackfillAttempted=false;
 let vwapCum={pv:0,v:0}; // volume-weighted, built from real futures cumulative volume deltas
 let prevCumVol=null;
 let niftyFutInstrument=null; // {tradingsymbol,token,expiry,lot_size} — auto-detected front month
@@ -348,6 +378,17 @@ function toast(msg,type){
   el.textContent=msg;w.appendChild(el);
   setTimeout(()=>el.remove(),4500);
 }
+function showBigOrderBanner(title,sub,type){
+  const b=document.getElementById('bigOrderBanner');
+  b.className='big-order-banner show '+(type||'info');
+  document.getElementById('bobIcon').textContent = type==='ok'?'✅':type==='err'?'🚫':'ℹ️';
+  document.getElementById('bobTitle').textContent=title;
+  document.getElementById('bobSub').textContent=sub||'';
+  // Stays visible until dismissed or replaced by the next order event — this is meant to be impossible to miss.
+}
+function hideBigOrderBanner(){
+  document.getElementById('bigOrderBanner').className='big-order-banner';
+}
 function logLine(msg,cls){
   const el=document.getElementById('engineLog');
   const d=document.createElement('div');
@@ -418,7 +459,7 @@ async function fetchQuotes(symList){
     const j=await res.json();
     if(!j.data)return false;
     Object.entries(j.data).forEach(([k,v])=>{
-      latestQuotes[k]={ltp:v.last_price,oi:v.oi!=null?v.oi:null,volume:v.volume!=null?v.volume:null,ohlc:v.ohlc||null};
+      latestQuotes[k]={ltp:v.last_price,oi:v.oi!=null?v.oi:null,volume:v.volume!=null?v.volume:null,ohlc:v.ohlc||null,instrument_token:v.instrument_token||null};
     });
     return true;
   }catch(e){logLine('Quote fetch error: '+e.message,'l-err');return false}
@@ -647,6 +688,12 @@ async function pollTick(){
   const spotQ=latestQuotes[NIFTY_SYM];
   if(spotQ&&spotQ.ltp!=null)latestSpotRef=spotQ.ltp;
 
+  if(!historicalBackfillAttempted && q.instrument_token){
+    historicalBackfillAttempted=true;
+    niftyFutInstrument.token=q.instrument_token;
+    backfillHistoricalCandles(q.instrument_token); // fire-and-forget; fixes first-candle/day-H-L/EMA-ST accuracy if we started mid-session
+  }
+
   onFuturesTick(q.ltp,q.volume,d);
   renderStrikeTable();
   renderTopStats();
@@ -711,14 +758,25 @@ async function pollOrderFills(){
       return;
     }
     const already=new Set(position.processedOrderIds||[]);
+    const totalOpenQtyAtStart=openLots.reduce((a,l)=>a+l.qty,0);
     const fills=j.data.filter(o=>o.tradingsymbol===position.symbol && o.transaction_type==='SELL' && o.status==='COMPLETE' && !already.has(o.order_id));
     for(const o of fills){
-      const lot=position.lots.find(l=>l.status==='open' && l.qty===o.quantity);
-      if(!lot)continue;
-      lot.status='closed';
-      const fillPx=parseFloat(o.average_price)||lot.targetPx;
-      recordLotExit(lot,fillPx,'GTT target (auto-detected fill)');
-      logLine(`Auto-detected fill: ${o.quantity}× ${position.symbol} @ ₹${fmt(fillPx)} (order #${o.order_id})`,'l-ok');
+      // Handle ANY sell quantity here, not just an exact single-lot match — a manual square-off in
+      // Kite typically sells the whole remaining position (e.g. 130 = both 65-qty lots) in one order,
+      // which previously matched nothing and left the position stuck showing "open" forever.
+      let remainingQty=o.quantity;
+      const fillPx=parseFloat(o.average_price)||null;
+      const reasonTag = o.quantity>=totalOpenQtyAtStart ? 'Manual/full square-off (auto-detected, order #'+o.order_id+')' : 'GTT target or partial exit (auto-detected, order #'+o.order_id+')';
+      while(remainingQty>0){
+        const lot=position.lots.find(l=>l.status==='open');
+        if(!lot)break;
+        lot.status='closed';
+        if(lot.gttId) await cancelGTT(lot.gttId); // in case this fill was a manual square-off, not the GTT itself — otherwise it's a harmless no-op on an already-fired GTT
+        recordLotExit(lot,fillPx||lot.targetPx,reasonTag);
+        remainingQty-=lot.qty;
+      }
+      logLine(`Auto-detected fill: ${o.quantity}× ${position.symbol} @ ₹${fmt(fillPx)} (order #${o.order_id}) — ${reasonTag}`,'l-ok');
+      showBigOrderBanner(`✅ FILL DETECTED: ${o.quantity} × ${position.symbol}`,`@ ₹${fmt(fillPx)} · ${reasonTag}`,'ok');
       position.processedOrderIds=[...(position.processedOrderIds||[]),o.order_id];
       renderPosition();
     }
@@ -769,7 +827,7 @@ function resetForNewDay(){
   st2State={atr:null,upper:null,lower:null,dir:null,val:null};
   trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
   st1Series=[];st2Series=[];smiSeries=[];
-  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;
+  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;historicalBackfillAttempted=false;
   logLine('New trading day — state reset.');
   renderCandleTable();
   renderArmedCards();
@@ -790,7 +848,7 @@ function onFuturesTick(ltp,cumVol,d){
     prevCumVol=cumVol;
   }
 
-  const bucketStart=Math.floor(d.getTime()/CANDLE_MS)*CANDLE_MS;
+  const bucketStart=bucketStartFor(d.getTime());
   if(!liveCandle||liveCandle.t0!==bucketStart){
     if(liveCandle){
       closeCandle(liveCandle);
@@ -825,6 +883,61 @@ function marketOpenBucketMs(sampleT0){
   const d=new Date(sampleT0);
   d.setHours(9,15,0,0);
   return d.getTime();
+}
+function bucketStartFor(t){
+  const openMs=marketOpenBucketMs(t);
+  return openMs+Math.floor((t-openMs)/CANDLE_MS)*CANDLE_MS;
+}
+
+async function backfillHistoricalCandles(token){
+  const now=nowIST();
+  const dateStr=dayKey(now);
+  const pad=n=>String(n).padStart(2,'0');
+  const nowStr=`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  try{
+    logLine('Fetching historical 1-min candles from 9:15 to backfill the session (Kite has no native 2-min interval, so we re-bucket 1-min bars)…');
+    const params=new URLSearchParams({from:`${dateStr} 09:15:00`,to:`${dateStr} ${nowStr}`});
+    const res=await fetch(`${ZD_WORKER}/kite/instruments/historical/${token}/minute?${params.toString()}`,{headers:{'X-Kite-Version':'3','Authorization':`token ${zdApiKey}:${zdToken}`}});
+    if(!res.ok){logLine(`Historical backfill failed: HTTP ${res.status} — keeping live-only candles from whenever the engine actually started today.`,'l-err');return}
+    const j=await res.json();
+    const raw=j&&j.data&&j.data.candles;
+    if(!Array.isArray(raw)||!raw.length){logLine('Historical backfill returned no candles — keeping live-only data.','l-err');return}
+
+    // Re-bucket 1-min bars into our 9:15-aligned 2-min grid
+    const buckets=new Map();
+    for(const row of raw){
+      const t=new Date(row[0]).getTime();
+      const bs=bucketStartFor(t);
+      const o=row[1],h=row[2],l=row[3],c=row[4];
+      if(!buckets.has(bs))buckets.set(bs,{t0:bs,o,h,l,c,mins:1});
+      else{const b=buckets.get(bs);b.h=Math.max(b.h,h);b.l=Math.min(b.l,l);b.c=c;b.mins++;}
+    }
+    let built=[...buckets.values()].sort((a,b)=>a.t0-b.t0);
+    // Drop the final bucket if it isn't fully closed yet (fewer than 2 one-min bars AND its window hasn't ended)
+    if(built.length && built[built.length-1].mins<2 && (built[built.length-1].t0+CANDLE_MS)>now.getTime()){
+      built=built.slice(0,-1);
+    }
+    if(!built.length){logLine('Historical backfill produced no complete 2-min candles yet — too early in the session.');return}
+
+    // Replace all session state with the real backfilled series
+    candles=[];liveCandle=null;dayHigh=-Infinity;dayLow=Infinity;firstCandle=null;
+    ema22Series=[];ema50Series=[];st1Series=[];st2Series=[];smiSeries=[];trArr=[];
+    st1State={atr:null,upper:null,lower:null,dir:null,val:null};
+    st2State={atr:null,upper:null,lower:null,dir:null,val:null};
+    smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
+    for(const cd of built){
+      candles.push(cd);
+      dayHigh=Math.max(dayHigh,cd.h);dayLow=Math.min(dayLow,cd.l);
+      if(!firstCandle)firstCandle={h:cd.h,l:cd.l};
+      computeIndicatorsForCandle(cd);
+    }
+    firstCandleUnreliable=false;
+    renderCandleTable();renderTopStats();
+    logLine(`✓ Backfilled ${built.length} real 2-min candles from 9:15 — first candle H=${fmt(firstCandle.h)} L=${fmt(firstCandle.l)}, Day H/L=${fmt(dayHigh)}/${fmt(dayLow)}. EMA/SuperTrend/SMI recomputed from the true session start.`,'l-ok');
+    toast('Session backfilled from 9:15 — first candle and Day H/L are now accurate','ok');
+  }catch(e){
+    logLine('Historical backfill error: '+e.message+' — keeping live-only data.','l-err');
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -924,7 +1037,8 @@ function updateSMI(cd){
    ══════════════════════════════════════════════════════════════ */
 function runSignalEngine(cd){
   const banner=document.getElementById('signalBanner');
-  document.getElementById('regimePill').textContent = (tradeCount===0 && !firstCandleUnreliable) ? 'Regime 1 · ORB' : (tradeCount===0?'Regime 2 · Trend (ORB skipped, late start)':'Regime 2 · Trend');
+  const regime = (tradeCount===0 && !firstCandleUnreliable) ? 1 : 2;
+  document.getElementById('regimePill').textContent = regime===1 ? 'Regime 1 · ORB' : (tradeCount===0?'Regime 2 · Trend (ORB skipped, late start)':'Regime 2 · Trend');
 
   const d=nowIST();
   const cutoffStr=document.getElementById('inpCutoff').value||'14:30';
@@ -935,88 +1049,90 @@ function runSignalEngine(cd){
 
   if(position){
     manageOpenPosition(cd);
-    return; // no new entries while a position is open
+    renderChecklist(null); // no active checklist while a position is open
+    return;
   }
-  if(pastCutoff)return;
-  if(candles.length<2||!firstCandle)return;
+  if(pastCutoff){renderChecklist(null);return}
+  if(candles.length<2||!firstCandle){renderChecklist(null);return}
 
-  if(tradeCount===0 && !firstCandleUnreliable){
-    runRegime1(cd,banner);
+  const vw=vwapNow();
+  const i=ema22Series.length-1;
+  const ema22now=i>=0?ema22Series[i]:null;
+  const core = regime===1 ? evalRegime1Core(cd) : evalRegime2Core(cd);
+
+  const checklist={CE:[{...core.CE}],PE:[{...core.PE}]};
+  if(regime===2){
+    const smi=smiState.raw;
+    checklist.CE.push({label:'SMI not oversold'+(smi!=null?' ('+fmt(smi)+' > -65)':''),ok:smi!=null&&smi>-65});
+    checklist.PE.push({label:'SMI not overbought'+(smi!=null?' ('+fmt(smi)+' < 65)':''),ok:smi!=null&&smi<65});
+  }
+  checklist.CE.push({label:'Price above VWAP'+(vw!=null?' ('+fmt(vw)+')':''),ok:vw!=null&&cd.c>vw});
+  checklist.PE.push({label:'Price below VWAP'+(vw!=null?' ('+fmt(vw)+')':''),ok:vw!=null&&cd.c<vw});
+  checklist.CE.push({label:'Price above EMA22'+(ema22now!=null?' ('+fmt(ema22now)+')':''),ok:ema22now!=null&&cd.c>ema22now});
+  checklist.PE.push({label:'Price below EMA22'+(ema22now!=null?' ('+fmt(ema22now)+')':''),ok:ema22now!=null&&cd.c<ema22now});
+  renderChecklist(checklist);
+
+  const ceAll=checklist.CE.every(x=>x.ok);
+  const peAll=checklist.PE.every(x=>x.ok);
+
+  if(ceAll){
+    if(regime===2)regime2Wait=null;
+    fireSignal('CE',`${core.CE.label} — all conditions confirmed`);
+  }else if(peAll){
+    if(regime===2)regime2Wait=null;
+    fireSignal('PE',`${core.PE.label} — all conditions confirmed`);
+  }else if(core.CE.ok||core.PE.ok){
+    const dir=core.CE.ok?'CE':'PE';
+    const failed=checklist[dir].filter(x=>!x.ok).map(x=>x.label);
+    banner.innerHTML=`<span class="badge b-wait">${dir} core condition met — waiting on: ${failed.join(', ')}</span>`;
   }else{
-    runRegime2(cd,banner);
+    banner.innerHTML=`<span class="badge b-flat">${core.watchingLabel}</span>`;
   }
 }
 
 function vwapNow(){return vwapCum.v?vwapCum.pv/vwapCum.v:null}
 
-function runRegime1(cd,banner){
-  // Only check the candle that just closed (freshest), and only if it's not the first candle itself
-  if(candles.length<2)return;
-  const vw=vwapNow();
-  if(cd.o>firstCandle.h){
-    const vwapConfirm = vw!=null && cd.c>vw;
-    if(vwapConfirm){
-      fireSignal('CE',`ORB breakout up: candle opened ${fmt(cd.o)} > first-candle high ${fmt(firstCandle.h)}, confirmed by VWAP (${fmt(vw)})`);
-    }else{
-      banner.innerHTML=`<span class="badge b-wait">ORB breakout up detected but VWAP not confirming (price ${fmt(cd.c)} vs VWAP ${fmt(vw)}) — waiting</span>`;
-    }
-  }else if(cd.o<firstCandle.l){
-    const vwapConfirm = vw!=null && cd.c<vw;
-    if(vwapConfirm){
-      fireSignal('PE',`ORB breakout down: candle opened ${fmt(cd.o)} < first-candle low ${fmt(firstCandle.l)}, confirmed by VWAP (${fmt(vw)})`);
-    }else{
-      banner.innerHTML=`<span class="badge b-wait">ORB breakout down detected but VWAP not confirming (price ${fmt(cd.c)} vs VWAP ${fmt(vw)}) — waiting</span>`;
-    }
-  }else{
-    banner.innerHTML=`<span class="badge b-flat">Regime 1: watching for a candle to open beyond first-candle range (${fmt(firstCandle.l)} – ${fmt(firstCandle.h)})</span>`;
-  }
+function evalRegime1Core(cd){
+  const ceOk=cd.o>firstCandle.h, peOk=cd.o<firstCandle.l;
+  return{
+    CE:{label:`Candle opened above first-candle high (${fmt(firstCandle.h)})`,ok:ceOk},
+    PE:{label:`Candle opened below first-candle low (${fmt(firstCandle.l)})`,ok:peOk},
+    watchingLabel:`Regime 1: watching for a candle to open beyond first-candle range (${fmt(firstCandle.l)} – ${fmt(firstCandle.h)})`
+  };
 }
 
-function runRegime2(cd,banner){
+function evalRegime2Core(cd){
   const i=ema22Series.length-1;
-  if(i<1){banner.innerHTML='<span class="badge b-flat">Regime 2: waiting for enough candles to compute EMA crossover</span>';return}
+  if(i<1)return{CE:{label:'EMA22↗EMA50 crossed + dual SuperTrend bullish',ok:false},PE:{label:'EMA22↘EMA50 crossed + dual SuperTrend bearish',ok:false},watchingLabel:'Regime 2: waiting for enough candles to compute EMA crossover'};
   const e22now=ema22Series[i],e22prev=ema22Series[i-1];
   const e50now=ema50Series[i],e50prev=ema50Series[i-1];
-  const crossUp = e22prev<=e50prev && e22now>e50now;
-  const crossDn = e22prev>=e50prev && e22now<e50now;
-  const stBull = st1State.dir===1 && st2State.dir===1;
-  const stBear = st1State.dir===-1 && st2State.dir===-1;
-  const smi=smiState.raw;
+  const crossUp=e22prev<=e50prev&&e22now>e50now;
+  const crossDn=e22prev>=e50prev&&e22now<e50now;
+  const stBull=st1State.dir===1&&st2State.dir===1;
+  const stBear=st1State.dir===-1&&st2State.dir===-1;
+  // A valid crossover+SuperTrend event arms a pending direction, which then persists across candles
+  // (checking SMI/VWAP/EMA22 every candle) until it either fires or an opposite crossover replaces it —
+  // this is what lets a signal wait a few candles for the other gates without re-requiring the exact
+  // crossover instant to coincide with them.
+  if(crossUp&&stBull)regime2Wait={dir:'CE'};
+  else if(crossDn&&stBear)regime2Wait={dir:'PE'};
+  return{
+    CE:{label:'EMA22↗EMA50 crossed + dual SuperTrend bullish',ok:!!(regime2Wait&&regime2Wait.dir==='CE')},
+    PE:{label:'EMA22↘EMA50 crossed + dual SuperTrend bearish',ok:!!(regime2Wait&&regime2Wait.dir==='PE')},
+    watchingLabel:`Regime 2: watching EMA22/50 crossover + dual SuperTrend agreement (ST7,3=${st1State.dir>0?'up':'down'}, ST7,2=${st2State.dir>0?'up':'down'})`
+  };
+}
 
-  // If we're already gated waiting for SMI to exit a zone, check that first
-  if(regime2Wait){
-    const dir=regime2Wait.dir;
-    if(dir==='CE' && smi>-65){
-      regime2Wait=null;
-      fireSignal('CE',`Regime 2: EMA/SuperTrend signal held, SMI exited oversold (${fmt(smi)}) — entering`);
-      return;
-    }
-    if(dir==='PE' && smi<65){
-      regime2Wait=null;
-      fireSignal('PE',`Regime 2: EMA/SuperTrend signal held, SMI exited overbought (${fmt(smi)}) — entering`);
-      return;
-    }
-    banner.innerHTML=`<span class="badge b-wait">Regime 2: ${dir} signal held, waiting for SMI (${fmt(smi)}) to exit ${dir==='CE'?'oversold (-65)':'overbought (+65)'}</span>`;
-    return;
-  }
-
-  if(crossUp && stBull){
-    if(smi<=-65){
-      regime2Wait={dir:'CE'};
-      banner.innerHTML=`<span class="badge b-wait">EMA22 crossed above EMA50, both SuperTrends bullish — but SMI (${fmt(smi)}) already oversold, waiting to exit zone</span>`;
-    }else{
-      fireSignal('CE',`Regime 2: EMA22 crossed above EMA50, both SuperTrends bullish, SMI (${fmt(smi)}) not oversold`);
-    }
-  }else if(crossDn && stBear){
-    if(smi>=65){
-      regime2Wait={dir:'PE'};
-      banner.innerHTML=`<span class="badge b-wait">EMA22 crossed below EMA50, both SuperTrends bearish — but SMI (${fmt(smi)}) already overbought, waiting to exit zone</span>`;
-    }else{
-      fireSignal('PE',`Regime 2: EMA22 crossed below EMA50, both SuperTrends bearish, SMI (${fmt(smi)}) not overbought`);
-    }
-  }else{
-    banner.innerHTML=`<span class="badge b-flat">Regime 2: watching EMA22/50 crossover + dual SuperTrend agreement (ST7,3=${st1State.dir>0?'up':'down'}, ST7,2=${st2State.dir>0?'up':'down'})</span>`;
-  }
+function renderChecklist(checklist){
+  const wrap=document.getElementById('checklistWrap');
+  if(!wrap)return;
+  if(!checklist){wrap.innerHTML='<div class="small">No active checklist — either a position is open, past cutoff, or not enough data yet.</div>';return}
+  const row=(items)=>items.map(x=>`<div class="chk-row ${x.ok?'chk-ok':''}"><span class="chk-box">${x.ok?'✓':''}</span>${x.label}</div>`).join('');
+  wrap.innerHTML=`
+    <div class="grid grid-2">
+      <div><div class="small" style="font-weight:700;color:var(--bull);margin-bottom:4px">CE CONDITIONS</div>${row(checklist.CE)}</div>
+      <div><div class="small" style="font-weight:700;color:var(--bear);margin-bottom:4px">PE CONDITIONS</div>${row(checklist.PE)}</div>
+    </div>`;
 }
 
 function fireSignal(dir,reason){
@@ -1099,6 +1215,7 @@ async function executeBuy(dir,strike,reason){
       const entryPx=(latestQuotes['NFO:'+sym]||{}).ltp||0;
       logOrder('BUY',sym,qty,entryPx,'Entry — '+dir,'placed #'+j.data.order_id);
       toast('BUY order placed ✓ #'+j.data.order_id,'ok');
+      showBigOrderBanner(`✅ BOUGHT ${qty} × ${sym}`,`${dir} · ${lots} lots @ ~₹${fmt(entryPx)} · Order #${j.data.order_id}`,'ok');
       logLine(`BUY ${qty}× ${sym} @ ~₹${fmt(entryPx)} → order #${j.data.order_id}`,'l-ok');
       const tradeId=Date.now()+'_'+dir;
       position={dir,symbol:sym,token:inst.token,lotSize,strike,tradeId,entryTime:new Date(),
@@ -1117,8 +1234,9 @@ async function executeBuy(dir,strike,reason){
     }else{
       const msg=(j.message||j.error_type||JSON.stringify(j)).toString().slice(0,120);
       toast('Order failed: '+msg,'err');logLine('BUY FAIL: '+msg,'l-err');
+      showBigOrderBanner('🚫 ORDER FAILED',msg,'err');
     }
-  }catch(e){toast('Order error: '+e.message,'err');logLine('BUY error: '+e.message,'l-err')}
+  }catch(e){toast('Order error: '+e.message,'err');logLine('BUY error: '+e.message,'l-err');showBigOrderBanner('🚫 ORDER ERROR',e.message,'err')}
 }
 
 function renderTradeHistory(){
@@ -1253,6 +1371,7 @@ async function exitRemainingLots(reason){
       const exitPx=(latestQuotes['NFO:'+position.symbol]||{}).ltp||0;
       logOrder('SELL',position.symbol,qty,exitPx,reason,'placed #'+j.data.order_id);
       toast('Exit order placed ✓','ok');
+      showBigOrderBanner(`✅ EXITED ${qty} × ${position.symbol}`,`@ ~₹${fmt(exitPx)} · Reason: ${reason} · Order #${j.data.order_id}`,'ok');
       openLots.forEach(l=>{l.status='closed';recordLotExit(l,exitPx,reason)});
       finalizeTrade();
       position=null;
@@ -1261,8 +1380,9 @@ async function exitRemainingLots(reason){
     }else{
       toast('Exit order failed — exit manually in Kite app immediately','err');
       logLine('EXIT FAIL: '+(j.message||JSON.stringify(j)).slice(0,120),'l-err');
+      showBigOrderBanner('🚫 EXIT FAILED — GO TO KITE NOW',(j.message||'Unknown error').slice(0,140),'err');
     }
-  }catch(e){toast('Exit error: '+e.message+' — exit manually now','err');logLine('Exit error: '+e.message,'l-err')}
+  }catch(e){toast('Exit error: '+e.message+' — exit manually now','err');logLine('Exit error: '+e.message,'l-err');showBigOrderBanner('🚫 EXIT ERROR — GO TO KITE NOW',e.message,'err')}
   renderPosition();
 }
 
@@ -1344,14 +1464,15 @@ async function manualMarkLotFilled(idx){
   if(!position||!position.lots[idx]||position.lots[idx].status!=='open')return;
   const lot=position.lots[idx];
   const exitPx=lot.targetPx;
-  if(!confirm(`Mark lot ${idx+1} as filled at target ₹${fmt(exitPx)}? Only do this if you've confirmed the GTT actually executed in Kite.`))return;
+  if(!confirm(`Mark lot ${idx+1} as closed at ~₹${fmt(exitPx)}? Use this whether the GTT fired OR you closed it manually in Kite — either way this cancels its GTT so nothing is left orphaned.`))return;
   lot.status='closed';
-  recordLotExit(lot,exitPx,'GTT target (manually confirmed)');
+  if(lot.gttId) await cancelGTT(lot.gttId);
+  recordLotExit(lot,exitPx,'Manually confirmed (GTT fired or closed by hand)');
   const stillOpen=position.lots.some(l=>l.status==='open');
   if(!stillOpen){finalizeTrade();position=null;renderArmedCards()}
   renderPosition();
   saveSession();
-  toast('Lot marked filled and logged','ok');
+  toast('Lot marked closed, GTT cancelled, logged','ok');
 }
 
 function logOrder(side,sym,qty,price,reason,status){
