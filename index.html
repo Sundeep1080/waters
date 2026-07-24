@@ -161,6 +161,14 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     </div>
   </div>
 
+  <!-- TAB BAR -->
+  <div class="row" style="gap:6px">
+    <button class="btn btn-k" id="tabBtnLive" onclick="switchTab('live')" style="flex:1">Live Trading</button>
+    <button class="btn" id="tabBtnLog" onclick="switchTab('log')" style="flex:1">Session Log & Settings</button>
+  </div>
+
+  <div id="tabLive">
+
   <!-- LIVE NIFTY PANEL -->
   <div class="card">
     <div class="ct">Nifty Futures (Front Month) · Live <span class="small flexend" id="futContractNote">not loaded — connect first</span></div>
@@ -175,15 +183,6 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
       <div class="stat"><div class="lbl">SuperTrend 7,2</div><div class="val" id="statST2">—</div></div>
       <div class="stat"><div class="lbl">SMI 10,3,3</div><div class="val" id="statSMI">—</div></div>
     </div>
-    <div class="small" style="padding-top:6px">Entire engine (candles, EMA, SuperTrend, SMI, VWAP, Day H/L, first-candle H/L, strike selection) runs on the front-month futures contract. VWAP is now a genuine volume-weighted price, built from the futures contract's real cumulative traded volume. Spot is shown only for your own reference, it feeds nothing.</div>
-  </div>
-
-
-  <!-- SIGNAL ENGINE -->
-  <div class="card">
-    <div class="ct">Signal Engine <span class="pill" id="regimePill" style="background:var(--bg3);color:var(--text2)">Regime 1 · ORB</span><span class="small flexend" id="cutoffNote"></span></div>
-    <div id="signalBanner" class="row" style="padding:6px 0"><span class="badge b-flat">Waiting for market data…</span></div>
-    <div class="log" id="engineLog"></div>
   </div>
 
   <!-- ENTRY CONDITIONS CHECKLIST -->
@@ -192,15 +191,13 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     <div id="checklistWrap"><div class="small">No active checklist yet — connect and start the engine.</div></div>
   </div>
 
-  <!-- ARMED ENTRIES — Max OI Support/Resistance, always live, one-tap fire -->
+  <!-- ARMED ENTRIES — one-tap fire, strikes = ATM(rounded 100) ±100 -->
   <div class="card">
-    <div class="ct">Armed Entries — Max OI Support / Resistance
+    <div class="ct">Armed Entries
       <span class="small flexend" id="oiUpdatedNote">OI not loaded yet</span>
     </div>
     <div class="row" style="padding-bottom:8px">
-      <span class="small">OI scan band: ±<input class="inp" id="inpOIBand" value="10" style="width:40px;padding:4px 6px"> strikes</span>
-      <span class="small">Support (Max Put OI): <b id="lblSupport">—</b></span>
-      <span class="small">Resistance (Max Call OI): <b id="lblResistance">—</b></span>
+      <span class="small">Max-OI levels (reference only, not used for strike selection): Put OI peak <b id="lblSupport">—</b> · Call OI peak <b id="lblResistance">—</b> · scan band ±<input class="inp" id="inpOIBand" value="10" style="width:40px;padding:4px 6px"> strikes</span>
     </div>
     <div class="armed-grid">
       <div class="armed-card ce" id="armedCE"></div>
@@ -208,30 +205,41 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     </div>
   </div>
 
-  <!-- 2-MIN CANDLES -->
+  <!-- POSITION -->
   <div class="card">
-    <div class="ct">Nifty 2-Min Candles (Index) <span class="small flexend" id="candleCount"></span></div>
-    <div class="tw"><table><thead><tr><th>Time</th><th>O</th><th>H</th><th>L</th><th>C</th><th>EMA22</th><th>EMA50</th><th>ST 7,3</th><th>ST 7,2</th><th>SMI</th></tr></thead>
-    <tbody id="candleBody"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">No candles yet — connect and wait for market data.</td></tr></tbody></table></div>
+    <div class="ct">Open Position</div>
+    <div id="positionWrap" class="small" style="padding:6px 0">No open position.</div>
+  </div>
+
+  <!-- SIGNAL ENGINE — moved down per request, compact log height -->
+  <div class="card">
+    <div class="ct">Signal Engine <span class="pill" id="regimePill" style="background:var(--bg3);color:var(--text2)">Regime 1 · ORB</span><span class="small flexend" id="cutoffNote"></span></div>
+    <div id="signalBanner" class="row" style="padding:6px 0"><span class="badge b-flat">Waiting for market data…</span></div>
+    <div class="log" id="engineLog" style="max-height:90px"></div>
+  </div>
+
+  </div><!-- /tabLive -->
+
+  <div id="tabLog" style="display:none">
+
+  <!-- SESSION LOG (full day, for backtesting) -->
+  <div class="card">
+    <div class="ct">Session Log — Every 2-Min Candle <span class="small flexend" id="candleCount"></span></div>
+    <div class="tw" style="max-height:400px"><table><thead><tr><th>Time</th><th>O</th><th>H</th><th>L</th><th>C</th><th>EMA22</th><th>EMA50</th><th>ST 7,3</th><th>ST 7,2</th><th>SMI</th><th>CE Strike</th><th>PE Strike</th><th>Remarks</th></tr></thead>
+    <tbody id="candleBody"><tr><td colspan="13" style="text-align:center;color:var(--text3);padding:14px">No candles yet — connect and wait for market data.</td></tr></tbody></table></div>
   </div>
 
   <!-- STRIKES READY -->
   <div class="card">
     <div class="ct">Option Strikes Ready <span class="small flexend" id="expiryNote"></span></div>
     <div class="row" style="padding-bottom:6px">
-      <label class="small"><input type="checkbox" id="cbATM2" checked onchange="rebuildTrackedStrikes()"> ATM±2</label>
-      <label class="small"><input type="checkbox" id="cbATM1" checked onchange="rebuildTrackedStrikes()"> ATM±1</label>
+      <label class="small"><input type="checkbox" id="cbATM2" checked onchange="rebuildTrackedStrikes()"> ATM±200</label>
+      <label class="small"><input type="checkbox" id="cbATM1" checked onchange="rebuildTrackedStrikes()"> ATM±100</label>
       <label class="small"><input type="checkbox" id="cbATM0" checked onchange="rebuildTrackedStrikes()"> ATM</label>
       <span class="small flexend">Lots per entry: <input class="inp" id="inpLots" value="2" style="width:40px;padding:4px 6px"></span>
     </div>
     <div class="tw"><table><thead><tr><th>Strike</th><th>CE Symbol</th><th>CE LTP</th><th></th><th>PE Symbol</th><th>PE LTP</th><th></th></tr></thead>
     <tbody id="strikeBody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">Connect and click "Load Option Chain" first.</td></tr></tbody></table></div>
-  </div>
-
-  <!-- POSITION -->
-  <div class="card">
-    <div class="ct">Open Position</div>
-    <div id="positionWrap" class="small" style="padding:6px 0">No open position.</div>
   </div>
 
   <!-- ORDER LOG -->
@@ -268,7 +276,10 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
     </div>
   </div>
 
+  </div><!-- /tabLog -->
+
 </div>
+
 
 <script>
 /* ══════════════════════════════════════════════════════════════
@@ -290,6 +301,9 @@ let candles=[]; // closed candles {t0,o,h,l,c}
 let liveCandle=null; // forming candle
 let dayHigh=-Infinity, dayLow=Infinity;
 let firstCandle=null;
+let candleRemarks={}; // t0 -> array of remark strings, for the Session Log tab
+let candleStrikes={}; // t0 -> {ce,pe} strikes chosen at that candle's close
+let hypotheticalSignals=[]; // {dir,strike,sym,entryPx,hit5,hit10} — tracks every fired signal's premium forward, whether or not actually traded
 let firstCandleUnreliable=false; // true if engine started after 9:17 — Regime 1 (ORB) skipped for the day if so
 let historicalBackfillAttempted=false;
 let vwapCum={pv:0,v:0}; // volume-weighted, built from real futures cumulative volume deltas
@@ -304,7 +318,7 @@ let st1Series=[], st2Series=[], smiSeries=[]; // per-candle history for table di
 let tradeCount=0, lastDayKey=null;
 let regime2Wait=null; // {dir:'CE'|'PE'} when SMI-gated
 let armedStreak={dir:null,count:0}; // tracks consecutive candles a direction has been fully qualified — expires the signal after a few candles if not acted on
-const ARMED_MAX_CANDLES=3;
+const ARMED_MAX_CANDLES=6;
 let lastSignalReason=null;
 let position=null; // {dir, symbol, token, lotSize, lots:[{qty,entryPx,targetPx,gttId,status}], entryTime}
 let orderLog=[];
@@ -337,6 +351,7 @@ function saveSession(){
     ema22Series,ema50Series,st1State,st2State,trArr,smiState,
     st1Series,st2Series,smiSeries,tradeCount,regime2Wait,lastSignalReason,
     position,optionInstruments,trackedStrikes,supportStrike,resistanceStrike,armedDir,
+    candleRemarks,candleStrikes,hypotheticalSignals,armedStreak,
     orderLog:orderLog.slice(0,50)
   };
   idbSet('nos_session',snapshot);
@@ -357,6 +372,7 @@ async function restoreSession(){
   smiState=s.smiState||smiState;st1Series=s.st1Series||[];st2Series=s.st2Series||[];smiSeries=s.smiSeries||[];
   tradeCount=s.tradeCount||0;regime2Wait=s.regime2Wait||null;lastSignalReason=s.lastSignalReason||null;
   position=s.position||null;optionInstruments=s.optionInstruments||{};trackedStrikes=s.trackedStrikes||[];
+  candleRemarks=s.candleRemarks||{};candleStrikes=s.candleStrikes||{};hypotheticalSignals=s.hypotheticalSignals||[];armedStreak=s.armedStreak||{dir:null,count:0};
   supportStrike=s.supportStrike??null;resistanceStrike=s.resistanceStrike??null;armedDir=s.armedDir||null;
   orderLog=s.orderLog||[];
   lastDayKey=s.savedDate;
@@ -425,6 +441,12 @@ loadTradeHistory();
    KITE CONNECT
    ══════════════════════════════════════════════════════════════ */
 function setDot(state){document.getElementById('dot').className='dot '+(state||'')}
+function switchTab(name){
+  document.getElementById('tabLive').style.display = name==='live'?'block':'none';
+  document.getElementById('tabLog').style.display = name==='log'?'block':'none';
+  document.getElementById('tabBtnLive').className = 'btn '+(name==='live'?'btn-k':'');
+  document.getElementById('tabBtnLog').className = 'btn '+(name==='log'?'btn-k':'');
+}
 function toggleMask(){
   const k=document.getElementById('zdKey'),t=document.getElementById('zdTok'),b=document.getElementById('maskToggleBtn');
   const hidden=k.type==='password';
@@ -493,23 +515,6 @@ async function fetchQuotes(symList){
 /* ══════════════════════════════════════════════════════════════
    OPTION INSTRUMENT DISCOVERY (NFO dump, parsed client-side)
    ══════════════════════════════════════════════════════════════ */
-function computeExpiryDate(){
-  // Confirmed rule: trading Wed/Thu -> nearest upcoming Tuesday ("current" expiry).
-  // Trading Fri/Sat/Sun/Mon/Tue -> the Tuesday AFTER that ("next week" expiry).
-  const d=new Date();
-  const dow=d.getDay(); // 0 Sun .. 6 Sat
-  const nearestTue=new Date(d);
-  nearestTue.setDate(d.getDate()+((2-dow+7)%7));
-  let result;
-  if(dow===3||dow===4){ // Wed, Thu
-    result=nearestTue;
-  }else{ // Fri, Sat, Sun, Mon, Tue
-    result=new Date(nearestTue);
-    result.setDate(nearestTue.getDate()+7);
-  }
-  return result.toISOString().slice(0,10);
-}
-
 // Fallback for when the worker's instrument dump doesn't include FUT rows (confirmed the case for this
 // worker — it only returns NFO-OPT rows). Nifty monthly futures expire the same way as monthly options:
 // last Tuesday of the month. Kite's quote API accepts a plain trading symbol, so we don't need the
@@ -534,6 +539,24 @@ function computeFrontMonthFutureFallback(){
   return {tradingsymbol:`NIFTY${yy}${MON}FUT`,token:null,expiry:dayKey(expiry),lot_size:DEFAULT_LOT_SIZE,source:'constructed (worker dump has no FUT rows)'};
 }
 
+// Picks the NIFTY options expiry whose Days-To-Expiry falls in [DTE_MIN,DTE_MAX] — deliberately
+// skips weekly expiries (DTE always <=7) per instruction to never trade weekly options.
+const DTE_MIN=10, DTE_MAX=15;
+function pickExpiryByDTE(expirySet,todayStr){
+  const today=new Date(todayStr+'T00:00:00');
+  const scored=[...expirySet].map(e=>{
+    const dte=Math.round((new Date(e+'T00:00:00')-today)/86400000);
+    return {expiry:e,dte};
+  }).sort((a,b)=>a.dte-b.dte);
+  const inWindow=scored.filter(x=>x.dte>=DTE_MIN&&x.dte<=DTE_MAX);
+  if(inWindow.length)return {...inWindow[0],fallback:false};
+  // No expiry sits in the window today — pick whichever available expiry is numerically closest to it
+  if(!scored.length)return null;
+  const dist=x=>x.dte<DTE_MIN?DTE_MIN-x.dte:x.dte-DTE_MAX;
+  scored.sort((a,b)=>dist(a)-dist(b));
+  return {...scored[0],fallback:true};
+}
+
 async function loadOptionInstruments(){
   if(!connected){toast('Connect first','err');return}
   toast('Fetching NFO instrument dump…','ok');
@@ -545,24 +568,6 @@ async function loadOptionInstruments(){
     const text=await res.text();
     const lines=text.split('\n').filter(Boolean);
     logLine(`Instrument response: ${text.length} chars, ${lines.length} rows, content-type ${ctype}`);
-    if(text.length<500000){
-      logLine(`⚠ This is quite small for a full NFO dump (real one is usually several MB / 40,000+ rows covering all F&O). This might be a partial/cached/filtered response from your worker rather than the true passthrough.`,'l-err');
-    }
-    if(lines.length>1){
-      logLine(`Sample data row: ${lines[1].slice(0,160)}`);
-      const header0=lines[0].split(',');
-      const nameIdx0=header0.indexOf('name');
-      if(nameIdx0>=0){
-        const namesSeen=new Set();
-        for(let i=1;i<lines.length&&namesSeen.size<20;i++){
-          const cols=lines[i].split(',');
-          if(cols[nameIdx0])namesSeen.add(cols[nameIdx0]);
-        }
-        logLine(`Distinct "name" values actually present in this dump (up to 20 shown): [${[...namesSeen].join(', ')}]`);
-      }
-    }
-    const expiry=computeExpiryDate();
-    document.getElementById('expiryNote').textContent='Target expiry: '+expiry;
     const header=lines[0].split(',');
     const idx=n=>header.indexOf(n);
     const iTok=idx('instrument_token'),iSym=idx('tradingsymbol'),iName=idx('name'),iExp=idx('expiry'),iStrike=idx('strike'),iType=idx('instrument_type'),iLot=idx('lot_size');
@@ -571,29 +576,55 @@ async function loadOptionInstruments(){
       logLine(`Header parse failed — got columns: [${header.slice(0,8).join(', ')}${header.length>8?', …':''}]. Expected instrument_token,tradingsymbol,name,expiry,strike,instrument_type,lot_size among them.`,'l-err');
       return;
     }
-    optionInstruments={};
-    let count=0;
-    const futCandidates=[]; // {tradingsymbol,token,expiry,lot_size}
-    const todayStr=new Date().toISOString().slice(0,10);
     const cq=v=>v==null?v:v.replace(/^"+|"+$/g,''); // strip quote chars this worker wraps some fields in
+    const todayStr=dayKey(new Date());
+
+    // PASS 1: collect every NIFTY CE/PE expiry present, and all FUT rows, without filtering yet
+    const optionRows=[]; // {expiry,strike,type,sym,tok,lot}
+    const futCandidates=[];
+    const expirySet=new Set();
     for(let i=1;i<lines.length;i++){
       const ln=lines[i];if(!ln)continue;
       const p=ln.split(',').map(cq);
       if(p[iName]!=='NIFTY')continue;
       const type=p[iType];
       if(type==='FUT'){
-        if(p[iExp]>=todayStr){
-          futCandidates.push({tradingsymbol:p[iSym],token:parseInt(p[iTok]),expiry:p[iExp],lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE});
-        }
+        if(p[iExp]>=todayStr)futCandidates.push({tradingsymbol:p[iSym],token:parseInt(p[iTok]),expiry:p[iExp],lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE});
         continue;
       }
-      if(p[iExp]!==expiry)continue;
       if(type!=='CE'&&type!=='PE')continue;
-      const strike=Math.round(parseFloat(p[iStrike]));
-      if(!optionInstruments[strike])optionInstruments[strike]={};
-      optionInstruments[strike][type]={tradingsymbol:p[iSym],token:parseInt(p[iTok]),lot_size:parseInt(p[iLot])||DEFAULT_LOT_SIZE};
+      if(p[iExp]<todayStr)continue; // already expired, ignore
+      expirySet.add(p[iExp]);
+      optionRows.push({expiry:p[iExp],strike:Math.round(parseFloat(p[iStrike])),type,sym:p[iSym],tok:parseInt(p[iTok]),lot:parseInt(p[iLot])||DEFAULT_LOT_SIZE});
+    }
+
+    if(!expirySet.size){
+      const namesSeen=new Set();
+      for(let i=1;i<lines.length&&namesSeen.size<20;i++){const cols=lines[i].split(',').map(cq);if(header.indexOf('name')>=0&&cols[header.indexOf('name')])namesSeen.add(cols[header.indexOf('name')]);}
+      toast('No NIFTY option contracts found at all in this dump — check log','err');
+      logLine(`0 NIFTY option rows found. Distinct names present: [${[...namesSeen].join(', ')}]`,'l-err');
+      return;
+    }
+
+    // PASS 2: pick the expiry by DTE window, then filter pass-1 rows down to it
+    const picked=pickExpiryByDTE(expirySet,todayStr);
+    const expiry=picked.expiry;
+    document.getElementById('expiryNote').textContent=`Target expiry: ${expiry} (DTE ${picked.dte})`;
+    if(picked.fallback){
+      logLine(`⚠ No expiry available in the ${DTE_MIN}-${DTE_MAX} DTE window today — falling back to the closest one: ${expiry} (DTE ${picked.dte}). Available expiries were: [${[...expirySet].sort().join(', ')}]`,'l-err');
+    }else{
+      logLine(`Expiry selected by DTE rule (${DTE_MIN}-${DTE_MAX} days, never weekly): ${expiry} — DTE ${picked.dte}`,'l-ok');
+    }
+
+    optionInstruments={};
+    let count=0;
+    for(const r of optionRows){
+      if(r.expiry!==expiry)continue;
+      if(!optionInstruments[r.strike])optionInstruments[r.strike]={};
+      optionInstruments[r.strike][r.type]={tradingsymbol:r.sym,token:r.tok,lot_size:r.lot};
       count++;
     }
+
     // Front-month futures = soonest expiry that hasn't passed yet. Re-running this on every connect
     // means expiry-day rollover to the next contract happens automatically, no manual step needed.
     if(!futCandidates.length){
@@ -612,17 +643,12 @@ async function loadOptionInstruments(){
       }
     }
     if(count===0){
-      const sampleExpiries=new Set();
-      for(let i=1;i<lines.length && sampleExpiries.size<8;i++){
-        const p=lines[i].split(',');
-        if(p[iName]==='NIFTY')sampleExpiries.add(p[iExp]);
-      }
-      toast('No matching NIFTY contracts for '+expiry+' — see log for expiries actually found','err');
-      logLine(`0 NIFTY contracts matched expiry ${expiry}. Expiries actually present for NIFTY in this dump: [${[...sampleExpiries].join(', ')||'none found — "name" column may not equal literal NIFTY, check raw sample above'}]`,'l-err');
+      toast('No matching NIFTY contracts for '+expiry,'err');
+      logLine(`0 NIFTY contracts matched expiry ${expiry} even though it was in the expiry list — unexpected, check raw data.`,'l-err');
       return;
     }
-    toast(`Loaded ${count} NIFTY option contracts for ${expiry}`,'ok');
-    logLine(`Loaded ${count} NIFTY contracts (expiry ${expiry}).`,'l-ok');
+    toast(`Loaded ${count} NIFTY option contracts for ${expiry} (DTE ${picked.dte})`,'ok');
+    logLine(`Loaded ${count} NIFTY contracts (expiry ${expiry}, DTE ${picked.dte}).`,'l-ok');
     rebuildTrackedStrikes();
   }catch(e){toast('Instrument load error: '+e.message,'err');logLine('Instrument load error: '+e.message,'l-err')}
 }
@@ -631,14 +657,27 @@ function atmStrike(){
   if(!latestFutLtp)return null;
   return Math.round(latestFutLtp/50)*50;
 }
+function atmStrike100(){ // ATM rounded to nearest 100 — the base for CE/PE strike selection and the strikes table
+  if(!latestFutLtp)return null;
+  return Math.round(latestFutLtp/100)*100;
+}
+function ceTradeStrike(){ // CE = 100 points below ATM(rounded to 100)
+  const a=atmStrike100();
+  return a==null?null:a-100;
+}
+function peTradeStrike(){ // PE = 100 points above ATM(rounded to 100)
+  const a=atmStrike100();
+  return a==null?null:a+100;
+}
 
 function rebuildTrackedStrikes(){
-  const atm=atmStrike();
+  const atm=atmStrike100();
   if(atm==null||!Object.keys(optionInstruments).length){trackedStrikes=[];return}
+  // Strikes table shows only multiples of 100 (e.g. 23700, 23800, 23900), never the intermediate x50 strikes
   const set=new Set();
   if(document.getElementById('cbATM0').checked)set.add(atm);
-  if(document.getElementById('cbATM1').checked){set.add(atm-50);set.add(atm+50)}
-  if(document.getElementById('cbATM2').checked){set.add(atm-100);set.add(atm+100)}
+  if(document.getElementById('cbATM1').checked){set.add(atm-100);set.add(atm+100)}
+  if(document.getElementById('cbATM2').checked){set.add(atm-200);set.add(atm+200)}
   trackedStrikes=[...set].sort((a,b)=>a-b);
   renderStrikeTable();
   renderArmedCards();
@@ -647,14 +686,19 @@ function rebuildTrackedStrikes(){
 function renderStrikeTable(){
   const tb=document.getElementById('strikeBody');
   if(!trackedStrikes.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:14px">No strikes tracked yet — load option chain and wait for spot price.</td></tr>';return}
-  const atm=atmStrike();
+  const atm=atmStrike100();
+  const ceK=ceTradeStrike(),peK=peTradeStrike();
   tb.innerHTML=trackedStrikes.map(k=>{
     const inst=optionInstruments[k]||{};
     const ce=inst.CE,pe=inst.PE;
     const ceLtp=ce?(latestQuotes['NFO:'+ce.tradingsymbol]||{}).ltp:null;
     const peLtp=pe?(latestQuotes['NFO:'+pe.tradingsymbol]||{}).ltp:null;
     const isAtm=k===atm;
-    return `<tr class="${isAtm?'hi':''}"><td>${k}${isAtm?' <span class="pill" style="background:var(--kite-g);color:var(--kite)">ATM</span>':''}</td>
+    let tag='';
+    if(isAtm)tag+=' <span class="pill" style="background:var(--kite-g);color:var(--kite)">ATM</span>';
+    if(k===ceK)tag+=' <span class="pill p-ce">CE TRADE</span>';
+    if(k===peK)tag+=' <span class="pill p-pe">PE TRADE</span>';
+    return `<tr class="${isAtm?'hi':''}"><td>${k}${tag}</td>
       <td>${ce?ce.tradingsymbol:'—'}</td><td>${fmt(ceLtp)}</td>
       <td>${ce?`<button class="btn btn-bull" style="padding:2px 8px;font-size:9px" onclick="manualTrade('CE',${k})">Buy CE</button>`:''}</td>
       <td>${pe?pe.tradingsymbol:'—'}</td><td>${fmt(peLtp)}</td>
@@ -699,7 +743,11 @@ async function pollTick(){
   }
   const futSym='NFO:'+niftyFutInstrument.tradingsymbol;
   const syms=[futSym,NIFTY_SYM];
-  trackedStrikes.forEach(k=>{
+  const symSet=new Set(trackedStrikes);
+  const ceK=ceTradeStrike(),peK=peTradeStrike();
+  if(ceK!=null)symSet.add(ceK);
+  if(peK!=null)symSet.add(peK);
+  [...symSet].forEach(k=>{
     const inst=optionInstruments[k]||{};
     if(inst.CE)syms.push('NFO:'+inst.CE.tradingsymbol);
     if(inst.PE)syms.push('NFO:'+inst.PE.tradingsymbol);
@@ -818,15 +866,15 @@ async function pollOrderFills(){
    ARMED ENTRY CARDS — always-live CE/PE, blink-to-fire on signal
    ══════════════════════════════════════════════════════════════ */
 function renderArmedCards(){
-  renderOneArmedCard('CE',supportStrike,'armedCE');
-  renderOneArmedCard('PE',resistanceStrike,'armedPE');
+  renderOneArmedCard('CE',ceTradeStrike(),'armedCE');
+  renderOneArmedCard('PE',peTradeStrike(),'armedPE');
 }
 
 function renderOneArmedCard(dir,strike,elId){
   const el=document.getElementById(elId);
   if(strike==null||!optionInstruments[strike]||!optionInstruments[strike][dir]){
     el.className='armed-card '+dir.toLowerCase();
-    el.innerHTML=`<div class="armed-head"><b>${dir}</b><span class="small">awaiting OI scan</span></div><div class="small">Strike not yet determined.</div>`;
+    el.innerHTML=`<div class="armed-head"><b>${dir}</b><span class="small">waiting for futures price / option chain</span></div><div class="small">Strike not yet determined.</div>`;
     return;
   }
   const inst=optionInstruments[strike][dir];
@@ -836,12 +884,15 @@ function renderOneArmedCard(dir,strike,elId){
   const qty=lots*lotSize;
   const isArmed = armedDir===dir && !position;
   const disabled = !!position;
+  const t1=ltp!=null?round10(ltp*1.05):null;
+  const t2=ltp!=null?round10(ltp*1.10):null;
   el.className='armed-card '+dir.toLowerCase()+(disabled?' disabled':'');
   el.innerHTML=`
-    <div class="armed-head"><b>${dir} · ${strike}</b><span class="small">${dir==='CE'?'Support':'Resistance'} strike</span></div>
+    <div class="armed-head"><b>${dir} · ${strike}</b><span class="small">${dir==='CE'?'100 pts below ATM':'100 pts above ATM'}</span></div>
     <div class="small">${inst.tradingsymbol}</div>
     <div class="armed-ltp">₹${fmt(ltp)}</div>
-    <div class="armed-meta">${lots} lots × ${lotSize} = ${qty} qty · Targets +5% / +10%</div>
+    <div class="armed-meta">${lots} lots × ${lotSize} = ${qty} qty</div>
+    <div class="armed-meta">Target 1 (+5%): ${t1!=null?'₹'+fmt(t1):'—'} · Target 2 (+10%): ${t2!=null?'₹'+fmt(t2):'—'}</div>
     <button class="btn-fire ${dir.toLowerCase()} ${isArmed?'blink':''}" ${disabled||ltp==null?'disabled':''} onclick="armedBuy('${dir}',${strike})">
       ${disabled?'Position open':isArmed?'⚡ BUY '+dir+' NOW':'Buy '+dir}
     </button>`;
@@ -855,6 +906,7 @@ function resetForNewDay(){
   trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
   st1Series=[];st2Series=[];smiSeries=[];
   tradeCount=0;regime2Wait=null;armedDir=null;armedStreak={dir:null,count:0};supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;historicalBackfillAttempted=false;
+  candleRemarks={};candleStrikes={};hypotheticalSignals=[];
   logLine('New trading day — state reset.');
   renderCandleTable();
   renderArmedCards();
@@ -903,6 +955,8 @@ function closeCandle(cd){
     }
   }
   computeIndicatorsForCandle(cd);
+  candleStrikes[cd.t0]={ce:ceTradeStrike(),pe:peTradeStrike()};
+  checkHypotheticalTargets(cd);
   renderCandleTable();
   runSignalEngine(cd);
 }
@@ -1087,8 +1141,10 @@ function runSignalEngine(cd){
   const ema22now=i>=0?ema22Series[i]:null;
   const core = regime===1 ? evalRegime1Core(cd) : evalRegime2Core(cd);
 
-  const checklist={CE:[{...core.CE}],PE:[{...core.PE}]};
+  const checklist={CE:[...core.CE.items],PE:[...core.PE.items]};
   if(regime===2){
+    // Kept from our earlier SMI discussion — the latest instructions didn't explicitly re-mention SMI for
+    // Regime 2, so this is carried forward as an assumption. Remove if you don't want it as a gate anymore.
     const smi=smiState.raw;
     checklist.CE.push({label:'SMI not oversold'+(smi!=null?' ('+fmt(smi)+' > -65)':''),ok:smi!=null&&smi>-65});
     checklist.PE.push({label:'SMI not overbought'+(smi!=null?' ('+fmt(smi)+' < 65)':''),ok:smi!=null&&smi<65});
@@ -1106,8 +1162,8 @@ function runSignalEngine(cd){
     const dir=ceAll?'CE':'PE';
     armedStreak = armedStreak.dir===dir ? {dir,count:armedStreak.count+1} : {dir,count:1};
     if(armedStreak.count<=ARMED_MAX_CANDLES){
-      if(regime===2)regime2Wait=null;
-      fireSignal(dir,`${core[dir].label} — all conditions confirmed (candle ${armedStreak.count}/${ARMED_MAX_CANDLES})`);
+      const coreSummary=core[dir].items.map(x=>x.label).join(' + ');
+      fireSignal(dir,`${coreSummary} — all conditions confirmed (candle ${armedStreak.count}/${ARMED_MAX_CANDLES})`);
     }else{
       if(armedDir===dir){armedDir=null;renderArmedCards();}
       banner.innerHTML=`<span class="badge b-flat">${dir} conditions still valid but this signal expired after ${ARMED_MAX_CANDLES} candles without entry — waiting for a fresh setup before arming again</span>`;
@@ -1128,31 +1184,33 @@ function vwapNow(){return vwapCum.v?vwapCum.pv/vwapCum.v:null}
 function evalRegime1Core(cd){
   const ceOk=cd.o>firstCandle.h, peOk=cd.o<firstCandle.l;
   return{
-    CE:{label:`Candle opened above first-candle high (${fmt(firstCandle.h)})`,ok:ceOk},
-    PE:{label:`Candle opened below first-candle low (${fmt(firstCandle.l)})`,ok:peOk},
+    CE:{items:[{label:`Candle opened above first-candle high (${fmt(firstCandle.h)})`,ok:ceOk}],ok:ceOk},
+    PE:{items:[{label:`Candle opened below first-candle low (${fmt(firstCandle.l)})`,ok:peOk}],ok:peOk},
     watchingLabel:`Regime 1: watching for a candle to open beyond first-candle range (${fmt(firstCandle.l)} – ${fmt(firstCandle.h)})`
   };
 }
 
 function evalRegime2Core(cd){
   const i=ema22Series.length-1;
-  if(i<1)return{CE:{label:'EMA22↗EMA50 crossed + dual SuperTrend bullish',ok:false},PE:{label:'EMA22↘EMA50 crossed + dual SuperTrend bearish',ok:false},watchingLabel:'Regime 2: waiting for enough candles to compute EMA crossover'};
+  if(i<1)return{CE:{items:[{label:'Not enough candles yet for EMA22 slope',ok:false}],ok:false},PE:{items:[{label:'Not enough candles yet for EMA22 slope',ok:false}],ok:false},watchingLabel:'Regime 2: waiting for enough candles to compute EMA22 slope'};
   const e22now=ema22Series[i],e22prev=ema22Series[i-1];
-  const e50now=ema50Series[i],e50prev=ema50Series[i-1];
-  const crossUp=e22prev<=e50prev&&e22now>e50now;
-  const crossDn=e22prev>=e50prev&&e22now<e50now;
-  const stBull=st1State.dir===1&&st2State.dir===1;
-  const stBear=st1State.dir===-1&&st2State.dir===-1;
-  // A valid crossover+SuperTrend event arms a pending direction, which then persists across candles
-  // (checking SMI/VWAP/EMA22 every candle) until it either fires or an opposite crossover replaces it —
-  // this is what lets a signal wait a few candles for the other gates without re-requiring the exact
-  // crossover instant to coincide with them.
-  if(crossUp&&stBull)regime2Wait={dir:'CE'};
-  else if(crossDn&&stBear)regime2Wait={dir:'PE'};
+  const st1Bull=st1State.dir===1, st1Bear=st1State.dir===-1;
+  const st2Bull=st2State.dir===1, st2Bear=st2State.dir===-1;
+  const emaRising=e22now>e22prev, emaFalling=e22now<e22prev;
+  const ceItems=[
+    {label:'SuperTrend 7,3 bullish',ok:st1Bull},
+    {label:'SuperTrend 7,2 bullish',ok:st2Bull},
+    {label:'EMA22 rising',ok:emaRising}
+  ];
+  const peItems=[
+    {label:'SuperTrend 7,3 bearish',ok:st1Bear},
+    {label:'SuperTrend 7,2 bearish',ok:st2Bear},
+    {label:'EMA22 falling',ok:emaFalling}
+  ];
   return{
-    CE:{label:'EMA22↗EMA50 crossed + dual SuperTrend bullish',ok:!!(regime2Wait&&regime2Wait.dir==='CE')},
-    PE:{label:'EMA22↘EMA50 crossed + dual SuperTrend bearish',ok:!!(regime2Wait&&regime2Wait.dir==='PE')},
-    watchingLabel:`Regime 2: watching EMA22/50 crossover + dual SuperTrend agreement (ST7,3=${st1State.dir>0?'up':'down'}, ST7,2=${st2State.dir>0?'up':'down'})`
+    CE:{items:ceItems,ok:ceItems.every(x=>x.ok)},
+    PE:{items:peItems,ok:peItems.every(x=>x.ok)},
+    watchingLabel:`Regime 2: watching dual SuperTrend + EMA22 slope (ST7,3=${st1State.dir>0?'up':'down'}, ST7,2=${st2State.dir>0?'up':'down'}, EMA22 ${emaRising?'rising':emaFalling?'falling':'flat'})`
   };
 }
 
@@ -1175,8 +1233,35 @@ function fireSignal(dir,reason){
   lastSignalReason=reason;
   renderArmedCards();
   const banner=document.getElementById('signalBanner');
-  const strike = dir==='CE'?supportStrike:resistanceStrike;
+  const strike = dir==='CE'?ceTradeStrike():peTradeStrike();
   banner.innerHTML=`<span class="badge ${dir==='CE'?'b-bull':'b-bear'}">${dir} SIGNAL ARMED (strike ${strike??'?'}) — ${reason}. Tap the blinking button below to fire.</span>`;
+
+  if(armedStreak.count===1 && candles.length){
+    const t0=candles[candles.length-1].t0;
+    addRemark(t0, `${dir} BUY signal triggered (strike ${strike})`);
+    const inst=strike!=null?(optionInstruments[strike]||{})[dir]:null;
+    const ltp=inst?(latestQuotes['NFO:'+inst.tradingsymbol]||{}).ltp:null;
+    if(inst&&ltp!=null){
+      hypotheticalSignals.push({dir,strike,sym:inst.tradingsymbol,entryPx:ltp,hit5:false,hit10:false});
+    }
+  }
+}
+
+function addRemark(t0,text){
+  if(t0==null)return;
+  if(!candleRemarks[t0])candleRemarks[t0]=[];
+  candleRemarks[t0].push(text);
+}
+
+function checkHypotheticalTargets(cd){
+  hypotheticalSignals.forEach(h=>{
+    if(h.hit5&&h.hit10)return;
+    const ltp=(latestQuotes['NFO:'+h.sym]||{}).ltp;
+    if(ltp==null||!h.entryPx)return;
+    const pct=(ltp-h.entryPx)/h.entryPx*100;
+    if(!h.hit5&&pct>=5){h.hit5=true;addRemark(cd.t0,`${h.dir} ${h.strike} target +5% would have been met (₹${fmt(h.entryPx)}→₹${fmt(ltp)})`);}
+    if(!h.hit10&&pct>=10){h.hit10=true;addRemark(cd.t0,`${h.dir} ${h.strike} target +10% would have been met (₹${fmt(h.entryPx)}→₹${fmt(ltp)})`);}
+  });
 }
 
 function manualTrade(dir,strike){
@@ -1249,6 +1334,7 @@ async function executeBuy(dir,strike,reason){
       logOrder('BUY',sym,qty,entryPx,'Entry — '+dir,'placed #'+j.data.order_id);
       toast('BUY order placed ✓ #'+j.data.order_id,'ok');
       showBigOrderBanner(`✅ BOUGHT ${qty} × ${sym}`,`${dir} · ${lots} lots @ ~₹${fmt(entryPx)} · Order #${j.data.order_id}`,'ok');
+      if(candles.length)addRemark(candles[candles.length-1].t0,`${dir} BUY EXECUTED @ ₹${fmt(entryPx)} (${sym})`);
       logLine(`BUY ${qty}× ${sym} @ ~₹${fmt(entryPx)} → order #${j.data.order_id}`,'l-ok');
       const tradeId=Date.now()+'_'+dir;
       position={dir,symbol:sym,token:inst.token,lotSize,strike,tradeId,entryTime:new Date(),
@@ -1406,6 +1492,7 @@ async function exitRemainingLots(reason){
       logOrder('SELL',position.symbol,qty,exitPx,reason,'placed #'+j.data.order_id);
       toast('Exit order placed ✓','ok');
       showBigOrderBanner(`✅ EXITED ${qty} × ${position.symbol}`,`@ ~₹${fmt(exitPx)} · Reason: ${reason} · Order #${j.data.order_id}`,'ok');
+      if(candles.length)addRemark(candles[candles.length-1].t0,`EXIT @ ₹${fmt(exitPx)} — ${reason}`);
       openLots.forEach(l=>{l.status='closed';recordLotExit(l,exitPx,reason)});
       finalizeTrade();
       position=null;
@@ -1451,13 +1538,35 @@ function panicExit(){
 /* ══════════════════════════════════════════════════════════════
    RENDERING
    ══════════════════════════════════════════════════════════════ */
+let lastRenderedVwap=null;
 function renderTopStats(){
-  document.getElementById('statLTP').textContent=fmt(latestFutLtp);
-  document.getElementById('statSpotRef').textContent=fmt(latestSpotRef);
+  const vw=vwapNow();
+  const ltpColor = (latestFutLtp!=null&&vw!=null) ? (latestFutLtp>=vw?'var(--bull)':'var(--bear)') : 'inherit';
+  document.getElementById('statLTP').innerHTML=`<span style="color:${ltpColor}">${fmt(latestFutLtp)}</span>`;
+
+  const spotQ=latestQuotes[NIFTY_SYM];
+  const prevClose = spotQ&&spotQ.ohlc&&spotQ.ohlc.close!=null ? spotQ.ohlc.close : null;
+  if(latestSpotRef!=null&&prevClose){
+    const delta=latestSpotRef-prevClose;
+    const dColor=delta>=0?'var(--bull)':'var(--bear)';
+    document.getElementById('statSpotRef').innerHTML=`${fmt(latestSpotRef)} <span style="color:${dColor};font-size:12px">(${delta>=0?'+':''}${fmt(delta)})</span>`;
+  }else{
+    document.getElementById('statSpotRef').textContent=fmt(latestSpotRef);
+  }
+
   document.getElementById('statDayHL').textContent=(dayHigh>-Infinity?fmt(dayHigh):'—')+' / '+(dayLow<Infinity?fmt(dayLow):'—');
   document.getElementById('statFirstHL').textContent=firstCandle?fmt(firstCandle.h)+' / '+fmt(firstCandle.l):'pending';
-  const vw=vwapNow();
-  document.getElementById('statVWAP').textContent=vw!=null?fmt(vw):'—';
+
+  if(vw!=null){
+    const priceVsVwap = latestFutLtp!=null ? (latestFutLtp>=vw?'Above':'Below') : '';
+    const vwapArrow = lastRenderedVwap!=null ? (vw>lastRenderedVwap?' ▲':vw<lastRenderedVwap?' ▼':'') : '';
+    const vColor = latestFutLtp!=null ? (latestFutLtp>=vw?'var(--bull)':'var(--bear)') : 'inherit';
+    document.getElementById('statVWAP').innerHTML=`${fmt(vw)} <span style="color:${vColor};font-size:12px">(Price ${priceVsVwap}${vwapArrow})</span>`;
+    lastRenderedVwap=vw;
+  }else{
+    document.getElementById('statVWAP').textContent='—';
+  }
+
   const i=ema22Series.length-1;
   document.getElementById('statEMA').textContent=i>=0?fmt(ema22Series[i])+' / '+fmt(ema50Series[i]):'—';
   document.getElementById('statST1').innerHTML=st1State.dir!=null?`<span class="badge ${st1State.dir===1?'b-bull':'b-bear'}">${st1State.dir===1?'UP':'DOWN'} · ${fmt(st1State.val)}</span>`:'—';
@@ -1466,16 +1575,20 @@ function renderTopStats(){
 }
 
 function renderCandleTable(){
-  document.getElementById('candleCount').textContent=candles.length+' candles today';
+  document.getElementById('candleCount').textContent=candles.length+' candles today (full session — this is the backtest log)';
   const tb=document.getElementById('candleBody');
-  if(!candles.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">No candles yet.</td></tr>';return}
-  const rows=candles.slice(-30).reverse().map((cd,idx)=>{
+  if(!candles.length){tb.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:14px">No candles yet.</td></tr>';return}
+  const rows=candles.slice().reverse().map((cd,idx)=>{
     const realIdx=candles.length-1-idx;
     const t=new Date(cd.t0).toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit'});
     const s1=st1Series[realIdx],s2=st2Series[realIdx],sm=smiSeries[realIdx];
+    const ks=candleStrikes[cd.t0]||{};
+    const remarks=(candleRemarks[cd.t0]||[]).join(' · ');
     return `<tr><td>${t}</td><td>${fmt(cd.o)}</td><td>${fmt(cd.h)}</td><td>${fmt(cd.l)}</td><td>${fmt(cd.c)}</td>
       <td>${fmt(ema22Series[realIdx])}</td><td>${fmt(ema50Series[realIdx])}</td>
-      <td>${s1===1?'UP':s1===-1?'DN':'—'}</td><td>${s2===1?'UP':s2===-1?'DN':'—'}</td><td>${fmt(sm)}</td></tr>`;
+      <td>${s1===1?'UP':s1===-1?'DN':'—'}</td><td>${s2===1?'UP':s2===-1?'DN':'—'}</td><td>${fmt(sm)}</td>
+      <td>${ks.ce??'—'}</td><td>${ks.pe??'—'}</td>
+      <td class="small" style="max-width:280px">${remarks||''}</td></tr>`;
   });
   tb.innerHTML=rows.join('');
 }
