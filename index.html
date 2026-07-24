@@ -156,6 +156,7 @@ input[type=checkbox]{accent-color:var(--kite);width:13px;height:13px}
       <button class="btn btn-k" onclick="zdConnect()">Connect</button>
       <button class="btn" onclick="toggleAuto()" id="autoBtn">Auto Engine: OFF</button>
       <button class="btn" id="btnFetchInstr" onclick="loadOptionInstruments()" disabled>Load Option Chain</button>
+      <button class="btn" style="color:var(--bear)" onclick="forgetCredentials()">Forget credentials</button>
       <span class="small flexend">Worker: jade-kite.sundeep1080.workers.dev</span>
     </div>
   </div>
@@ -302,6 +303,8 @@ let smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
 let st1Series=[], st2Series=[], smiSeries=[]; // per-candle history for table display
 let tradeCount=0, lastDayKey=null;
 let regime2Wait=null; // {dir:'CE'|'PE'} when SMI-gated
+let armedStreak={dir:null,count:0}; // tracks consecutive candles a direction has been fully qualified — expires the signal after a few candles if not acted on
+const ARMED_MAX_CANDLES=3;
 let lastSignalReason=null;
 let position=null; // {dir, symbol, token, lotSize, lots:[{qty,entryPx,targetPx,gttId,status}], entryTime}
 let orderLog=[];
@@ -408,7 +411,7 @@ setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocal
 loadTradeHistory();
 (function initFromPriorSession(){
   try{
-    const k=sessionStorage.getItem('nos_zd_key'), t=sessionStorage.getItem('nos_zd_tok');
+    const k=localStorage.getItem('nos_zd_key'), t=localStorage.getItem('nos_zd_tok');
     if(k&&t){
       document.getElementById('zdKey').value=k;
       document.getElementById('zdTok').value=t;
@@ -429,6 +432,28 @@ function toggleMask(){
   b.textContent=hidden?'Hide':'Show';
 }
 
+function forgetCredentials(){
+  if(!confirm('Clear your saved API key and access token from this device? You\'ll need to type them again next time.'))return;
+  try{localStorage.removeItem('nos_zd_key');localStorage.removeItem('nos_zd_tok')}catch(e){}
+  document.getElementById('zdKey').value='';document.getElementById('zdTok').value='';
+  toast('Credentials cleared from this device','ok');
+  logLine('Credentials forgotten/cleared from localStorage.');
+}
+
+let wakeLock=null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock=await navigator.wakeLock.request('screen');
+      logLine('Screen wake lock active — screen won\'t auto-sleep while this tab is in the foreground.');
+      wakeLock.addEventListener('release',()=>logLine('Wake lock released (tab backgrounded, screen locked, or OS reclaimed it).'));
+    }
+  }catch(e){ /* not fatal — some browsers/contexts don't support this */ }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible' && autoEngine) requestWakeLock();
+});
+
 function zdConnect(){
   zdApiKey=document.getElementById('zdKey').value.trim();
   zdToken=document.getElementById('zdTok').value.trim();
@@ -441,7 +466,7 @@ function zdConnect(){
       document.getElementById('btnFetchInstr').disabled=false;
       toast('Connected to Kite','ok');
       logLine('Connected via worker.');
-      try{sessionStorage.setItem('nos_zd_key',zdApiKey);sessionStorage.setItem('nos_zd_tok',zdToken)}catch(e){}
+      try{localStorage.setItem('nos_zd_key',zdApiKey);localStorage.setItem('nos_zd_tok',zdToken)}catch(e){}
       await restoreSession(); // pick up candles/indicators/open position from before a reload, if any, same trading day
       loadOptionInstruments(); // also auto-detects front-month futures — re-runs every connect, so rollover is automatic
     }else{
@@ -650,6 +675,7 @@ function toggleAuto(){
     oiPollTimer=setInterval(pollOI,20000);
     orderFillPollTimer=setInterval(pollOrderFills,8000);
     toast('Engine started','ok');logLine('Auto engine started, poll every '+ms+'ms, OI scan every 20s, order-fill check every 8s');
+    requestWakeLock();
     pollTick();
     pollOI();
   }else{
@@ -657,6 +683,7 @@ function toggleAuto(){
     if(oiPollTimer)clearInterval(oiPollTimer);
     if(orderFillPollTimer)clearInterval(orderFillPollTimer);
     toast('Engine stopped','ok');logLine('Auto engine stopped.');
+    if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}
   }
 }
 
@@ -827,7 +854,7 @@ function resetForNewDay(){
   st2State={atr:null,upper:null,lower:null,dir:null,val:null};
   trArr=[];smiState={emaC1:null,emaC2:null,emaHl1:null,emaHl2:null,raw:null,sig:null};
   st1Series=[];st2Series=[];smiSeries=[];
-  tradeCount=0;regime2Wait=null;armedDir=null;supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;historicalBackfillAttempted=false;
+  tradeCount=0;regime2Wait=null;armedDir=null;armedStreak={dir:null,count:0};supportStrike=null;resistanceStrike=null;firstCandleUnreliable=false;historicalBackfillAttempted=false;
   logLine('New trading day — state reset.');
   renderCandleTable();
   renderArmedCards();
@@ -1075,17 +1102,23 @@ function runSignalEngine(cd){
   const ceAll=checklist.CE.every(x=>x.ok);
   const peAll=checklist.PE.every(x=>x.ok);
 
-  if(ceAll){
-    if(regime===2)regime2Wait=null;
-    fireSignal('CE',`${core.CE.label} — all conditions confirmed`);
-  }else if(peAll){
-    if(regime===2)regime2Wait=null;
-    fireSignal('PE',`${core.PE.label} — all conditions confirmed`);
+  if(ceAll||peAll){
+    const dir=ceAll?'CE':'PE';
+    armedStreak = armedStreak.dir===dir ? {dir,count:armedStreak.count+1} : {dir,count:1};
+    if(armedStreak.count<=ARMED_MAX_CANDLES){
+      if(regime===2)regime2Wait=null;
+      fireSignal(dir,`${core[dir].label} — all conditions confirmed (candle ${armedStreak.count}/${ARMED_MAX_CANDLES})`);
+    }else{
+      if(armedDir===dir){armedDir=null;renderArmedCards();}
+      banner.innerHTML=`<span class="badge b-flat">${dir} conditions still valid but this signal expired after ${ARMED_MAX_CANDLES} candles without entry — waiting for a fresh setup before arming again</span>`;
+    }
   }else if(core.CE.ok||core.PE.ok){
+    armedStreak={dir:null,count:0};
     const dir=core.CE.ok?'CE':'PE';
     const failed=checklist[dir].filter(x=>!x.ok).map(x=>x.label);
     banner.innerHTML=`<span class="badge b-wait">${dir} core condition met — waiting on: ${failed.join(', ')}</span>`;
   }else{
+    armedStreak={dir:null,count:0};
     banner.innerHTML=`<span class="badge b-flat">${core.watchingLabel}</span>`;
   }
 }
@@ -1226,6 +1259,7 @@ async function executeBuy(dir,strike,reason){
       recordTradeEntry(tradeId,dir,strike,sym,lots,lotSize,entryPx,reason);
       saveSession();
       tradeCount++;
+      armedStreak={dir:null,count:0};
       armedDir=null;
       renderArmedCards();
       await sleep(1200);
